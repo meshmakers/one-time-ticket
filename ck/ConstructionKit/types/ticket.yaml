@@ -1,0 +1,15 @@
+$schema: https://schemas.meshmakers.cloud/construction-kit-elements.schema.json
+types:
+- typeId: Ticket
+  description: A one-time secret voucher. Created by a developer, redeemable exactly once over HTTP.
+  derivedFromCkTypeId: ${System}/Entity-1
+  attributes:
+  - id: ${this}/TicketName-1
+    name: Name
+  - id: ${this}/TicketSecret-1
+    name: Secret
+  - id: ${this}/TicketRedeemed-1
+    name: Redeemed
+  - id: ${this}/TicketRedeemedAt-1
+    name: RedeemedAt
+    isOptional: true

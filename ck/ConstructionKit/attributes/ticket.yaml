@@ -1,0 +1,17 @@
+$schema: https://schemas.meshmakers.cloud/construction-kit-elements.schema.json
+attributes:
+- id: TicketName
+  description: Human-readable label of the ticket (e.g. "API key for ACME staging")
+  valueType: String
+
+- id: TicketSecret
+  description: The secret delivered on a successful redeem (e.g. an API key). Cleared after redemption.
+  valueType: String
+
+- id: TicketRedeemed
+  description: Whether this ticket has already been redeemed. A redeemed ticket never reveals its secret again.
+  valueType: Boolean
+
+- id: TicketRedeemedAt
+  description: Timestamp of the (single) successful redeem. Unset while the ticket is open.
+  valueType: DateTime

@@ -1,0 +1,264 @@
+$schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
+# TEMPORARY test dataflow for pipeline iteration — NOT the blueprint seed.
+# Temp rtIds (aaa1…) and temp paths (/ott-*) so nothing collides with the
+# final OneTimeTicket blueprint entities (0771…).
+dependencies:
+- System.Communication-[3.1,4.0)
+entities:
+  - rtId: aaa100000000000000000001
+    ckTypeId: System.Communication/DataFlow-1
+    attributes:
+      - id: System/Name-1
+        value: "ott-test"
+      - id: System/Description-1
+        value: "Temp test dataflow for one-time-ticket pipeline iteration"
+
+  - rtId: aaa100000000000000000002
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: aaa100000000000000000001
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "ott-test-create"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP POST /ott-tickets — body { name, secret }
+              method: Post
+              path: /ott-tickets
+
+          transformations:
+            - type: CreateUpdateInfo@1
+              description: Build the insert for the new ticket
+              updateKind: Insert
+              ckTypeId: Demo.Tickets/Ticket
+              rtIdPath: $.newTicketRtId
+              generateRtId: true
+              targetPath: $.updates
+              targetValueWriteMode: Append
+              targetValueKind: Array
+              attributeUpdates:
+                - attributeName: Name
+                  attributeValueType: String
+                  valuePath: $.body.name
+                - attributeName: Secret
+                  attributeValueType: String
+                  valuePath: $.body.secret
+                - attributeName: Redeemed
+                  attributeValueType: Boolean
+                  value: false
+
+            - type: ApplyChanges@2
+              description: Persist the ticket
+              entityUpdatesPath: $.updates
+
+            - type: SetPrimitiveValue@1
+              description: Expose the generated id
+              valuePath: $.updates[0].RtId
+              valueType: String
+              targetPath: $.ticketId
+
+            - type: Project@1
+              description: Response = { ticketId } only (never echo the secret back)
+              clear: true
+              fields:
+                - path: $.ticketId
+                  inclusion: true
+
+  - rtId: aaa100000000000000000003
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: aaa100000000000000000001
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "ott-test-list"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP GET /ott-tickets — list all tickets WITHOUT secrets
+              method: Get
+              path: /ott-tickets
+
+          transformations:
+            - type: GetRtEntitiesByType@1
+              description: Fetch all tickets
+              ckTypeId: Demo.Tickets/Ticket
+              take: 200
+              targetPath: $.lookup
+
+            - type: ForEach@1
+              description: Reduce each ticket to its public fields (no secret!)
+              iterationPath: $.lookup.Items
+              keyPath: $.key
+              mergePath: $.key.out
+              targetPath: $.tickets
+              transformations:
+                - type: SetPrimitiveValue@1
+                  valuePath: $.key.RtId
+                  valueType: String
+                  targetPath: $.key.out.id
+                - type: SetPrimitiveValue@1
+                  valuePath: $.key.Attributes.Name
+                  valueType: String
+                  targetPath: $.key.out.name
+                - type: SetPrimitiveValue@1
+                  valuePath: $.key.Attributes.Redeemed
+                  valueType: Boolean
+                  targetPath: $.key.out.redeemed
+                - type: SetPrimitiveValue@1
+                  valuePath: $.key.RtCreationDateTime
+                  valueType: DateTime
+                  targetPath: $.key.out.createdAt
+                - type: If@1
+                  description: RedeemedAt only exists on redeemed tickets — guard the copy
+                  path: $.key.Attributes.Redeemed
+                  operator: Equal
+                  value: true
+                  valueType: Boolean
+                  transformations:
+                    - type: SetPrimitiveValue@1
+                      valuePath: $.key.Attributes.RedeemedAt
+                      valueType: DateTime
+                      targetPath: $.key.out.redeemedAt
+
+            - type: Project@1
+              description: Response = { tickets } only
+              clear: true
+              fields:
+                - path: $.tickets
+                  inclusion: true
+
+  - rtId: aaa100000000000000000004
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: aaa100000000000000000001
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "ott-test-redeem"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP GET /ott-redeem?id=<ticketId> — return the secret exactly once
+              method: Get
+              path: /ott-redeem
+
+          transformations:
+            - type: GetRtEntitiesByType@1
+              description: Look up the ticket by its id
+              ckTypeId: Demo.Tickets/Ticket
+              targetPath: $.lookup
+              fieldFilters:
+                - attributePath: RtId
+                  operator: Equals
+                  comparisonValuePath: $.query.id
+
+            - type: If@1
+              description: Unknown ticket id
+              path: $.lookup.TotalCount
+              operator: Equal
+              value: 0
+              valueType: Int
+              transformations:
+                - type: SetPrimitiveValue@1
+                  value: not_found
+                  valueType: String
+                  targetPath: $.error
+
+            - type: If@1
+              description: Ticket exists
+              path: $.lookup.TotalCount
+              operator: GreaterThan
+              value: 0
+              valueType: Int
+              transformations:
+                - type: If@1
+                  description: Already redeemed — never reveal again
+                  path: $.lookup.Items[0].Attributes.Redeemed
+                  operator: Equal
+                  value: true
+                  valueType: Boolean
+                  transformations:
+                    - type: SetPrimitiveValue@1
+                      value: already_redeemed
+                      valueType: String
+                      targetPath: $.error
+
+                - type: If@1
+                  description: Open ticket — reveal once, then burn
+                  path: $.lookup.Items[0].Attributes.Redeemed
+                  operator: Equal
+                  value: false
+                  valueType: Boolean
+                  transformations:
+                    - type: SetPrimitiveValue@1
+                      description: Capture the secret for the response
+                      valuePath: $.lookup.Items[0].Attributes.Secret
+                      valueType: String
+                      targetPath: $.secret
+
+                    - type: DateTime@1
+                      description: Redeem timestamp
+                      operation: Now
+                      targetPath: $.now
+
+                    - type: CreateUpdateInfo@1
+                      description: Mark redeemed and clear the stored secret
+                      updateKind: Update
+                      ckTypeId: Demo.Tickets/Ticket
+                      rtIdPath: $.lookup.Items[0].RtId
+                      targetPath: $.updates
+                      targetValueWriteMode: Append
+                      targetValueKind: Array
+                      attributeUpdates:
+                        - attributeName: Redeemed
+                          attributeValueType: Boolean
+                          value: true
+                        - attributeName: RedeemedAt
+                          attributeValueType: DateTime
+                          valuePath: $.now
+                        - attributeName: Secret
+                          attributeValueType: String
+                          value: ""
+
+                    - type: ApplyChanges@2
+                      description: Persist the redeem
+                      entityUpdatesPath: $.updates
+
+            - type: Project@1
+              description: Response = { secret } or { error }
+              clear: true
+              fields:
+                - path: $.secret
+                  inclusion: true
+                - path: $.error
+                  inclusion: true

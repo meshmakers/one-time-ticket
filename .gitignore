@@ -1,0 +1,22 @@
+# Node
+node_modules/
+npm-debug.log*
+*.log
+
+# Compiled Construction Kit output (regenerate with octo-ckc compile)
+ck/out/
+
+# Secrets / local environment
+.env
+.env.*
+*.local
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp

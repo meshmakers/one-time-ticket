@@ -1,0 +1,497 @@
+$schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
+# ---------------------------------------------------------------------------
+# Seed data for the ZenonDynprop.MainLatest blueprint (dev/test channel).
+# Merged from the standalone ImportRt files (RtEntities.yaml + dataflow.yaml +
+# property-walker-app.yaml). Entities are verbatim except the property-walker
+# Application, whose tenant-specific values are templated with ${octo.tenantId}
+# so one blueprint serves every tenant.
+#
+# Associations into 670000000000000000000001/002/003 resolve against the
+# System.Communication blueprint applied first as a dependency.
+# ---------------------------------------------------------------------------
+dependencies:
+- System.Communication-[3.1,4.0)
+entities:
+  # === Editor adapter (from RtEntities.yaml) ===
+  # ---------------------------------------------------------------------------
+  # Zenon Editor adapter — created by this bundle (NOT auto-provisioned).
+  # The Mesh Adapter (rtId 670000000000000000000002) is seeded automatically by
+  # the System.Communication blueprint on every communication-enabled tenant, so
+  # it is deliberately NOT defined here; the dataflow pipelines just reference it.
+  #
+  # This is an edge adapter: the Zenon addin connects directly to the AdapterHub,
+  # so it carries no Pool/Helm associations (associations: []) and does not
+  # receive cluster secrets. Seeded in a neutral state — Unregistered /
+  # Unconfigured / Undeployed — until the addin connects.
+  # ---------------------------------------------------------------------------
+  - rtId: 69db94ac99233f509dd78fc5
+    ckTypeId: System.Communication/Adapter-1
+    associations: []
+    attributes:
+    - id: System/Name-1
+      value: Editor
+    - id: System/Description-1
+      value: 'Zenon Editor adapter — hosts the dynprop nodes the property-walker calls. Connects to the AdapterHub via the Zenon addin.'
+    - id: System.Communication/CommunicationState-1
+      value: 0
+    - id: System.Communication/ConfigurationState-1
+      value: 0
+    - id: System.Communication/DeploymentState-1
+      value: 0
+    - id: System.Communication/LastSyncedSequenceNumber-1
+      value: 0
+    - id: System.Communication/ReceivesClusterSecrets-1
+      value: false
+  # === DataFlow + 8 pipelines (from dataflow.yaml) ===
+
+  # ========================================================================
+  # DataFlow
+  # ========================================================================
+  - rtId: 69dc1117c6107c6049764ac5
+    ckTypeId: System.Communication/DataFlow-1
+    attributes:
+      - id: System/Name-1
+        value: "Zenon DynProp API"
+      - id: System/Description-1
+        value: "HTTP API over two adapters: mesh adapter serves /projects, /children, /value; editor adapter executes the Zenon dynprop nodes."
+
+  # ========================================================================
+  # Mesh Adapter pipelines — HTTP endpoints, delegate to the Editor adapter
+  # ========================================================================
+
+  - rtId: 69dc1117be6c3349fc848d01
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'   # Mesh Adapter (blueprint default, fixed rtId)
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "mesh-http-projects"
+      - id: System/Description-1
+        value: "GET /projects — delegates to zenon-list-projects"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP GET /projects
+              method: Get
+              path: /projects
+
+          transformations:
+            - type: DateTime@1
+              description: Capture mesh_in timestamp (before cross-pipeline dispatch)
+              operation: Now
+              targetPath: $.ts_mesh_in
+              targetValueWriteMode: Overwrite
+
+            - type: ToPipelineDataEvent@1
+              description: Delegate to Editor adapter's zenon-list-projects pipeline
+              path: $
+              targetPath: $
+              targetValueWriteMode: Overwrite
+              targetPipelineRtId: 69dc1117b7070a8fee5e4446
+              awaitResult: true
+              timeoutSeconds: 30
+              resultTargetPath: $
+
+            - type: DateTime@1
+              description: Capture mesh_out timestamp (after editor returned)
+              operation: Now
+              targetPath: $.ts_mesh_out
+              targetValueWriteMode: Overwrite
+
+  - rtId: 69dc11171c5f6f33a88f7877
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'   # Mesh Adapter (blueprint default, fixed rtId)
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "mesh-http-children"
+      - id: System/Description-1
+        value: "GET /children — delegates to zenon-get-children"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP GET /children — query { projectIdOrName, path }
+              method: Get
+              path: /children
+
+          transformations:
+            - type: DateTime@1
+              description: Capture mesh_in inside $.query so it rides along to the editor
+              operation: Now
+              targetPath: $.query.ts_mesh_in
+              targetValueWriteMode: Overwrite
+
+            - type: ToPipelineDataEvent@1
+              description: Delegate to Editor adapter's zenon-get-children pipeline
+              path: $.query
+              targetPath: $.request
+              targetValueWriteMode: Overwrite
+              targetPipelineRtId: 69dc1117c324aa93cd836b04
+              awaitResult: true
+              timeoutSeconds: 30
+              resultTargetPath: $
+
+            - type: DateTime@1
+              description: Capture mesh_out after editor result merged back
+              operation: Now
+              targetPath: $.ts_mesh_out
+              targetValueWriteMode: Overwrite
+
+  - rtId: 69dc1117ad6590025720dedd
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'   # Mesh Adapter (blueprint default, fixed rtId)
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "mesh-http-value"
+      - id: System/Description-1
+        value: "GET /value — delegates to zenon-get-value"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP GET /value — query { projectIdOrName, path }
+              method: Get
+              path: /value
+
+          transformations:
+            - type: DateTime@1
+              description: Capture mesh_in inside $.query so it rides along to the editor
+              operation: Now
+              targetPath: $.query.ts_mesh_in
+              targetValueWriteMode: Overwrite
+
+            - type: ToPipelineDataEvent@1
+              description: Delegate to Editor adapter's zenon-get-value pipeline
+              path: $.query
+              targetPath: $.request
+              targetValueWriteMode: Overwrite
+              targetPipelineRtId: 69dc1117b9312035b5b759de
+              awaitResult: true
+              timeoutSeconds: 30
+              resultTargetPath: $
+
+            - type: DateTime@1
+              description: Capture mesh_out after editor result merged back
+              operation: Now
+              targetPath: $.ts_mesh_out
+              targetValueWriteMode: Overwrite
+
+  # ========================================================================
+  # Editor adapter pipelines — call the actual Zenon dynprop nodes
+  # ========================================================================
+
+  - rtId: 69dc1117b7070a8fee5e4446
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: 69db94ac99233f509dd78fc5     # Editor
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "zenon-list-projects"
+      - id: System/Description-1
+        value: "ListZenonProjects — returns projects loaded in the Editor"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromPipelineDataEvent@1
+              description: Triggered by mesh-http-projects via ToPipelineDataEvent (awaitResult)
+
+          transformations:
+            - type: DateTime@1
+              description: Capture editor_in right before Zenon work
+              operation: Now
+              targetPath: $.ts_editor_in
+              targetValueWriteMode: Overwrite
+
+            - type: ListZenonProjects@1
+              description: List all projects currently loaded in the Zenon Editor
+              targetPath: $.projects
+              targetValueWriteMode: Overwrite
+
+            - type: DateTime@1
+              description: Capture editor_out right after Zenon work
+              operation: Now
+              targetPath: $.ts_editor_out
+              targetValueWriteMode: Overwrite
+
+  - rtId: 69dc1117c324aa93cd836b04
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: 69db94ac99233f509dd78fc5     # Editor
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "zenon-get-children"
+      - id: System/Description-1
+        value: "GetZenonDynamicProperties — children at a given Zenon path"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromPipelineDataEvent@1
+              description: Triggered by mesh-http-children via ToPipelineDataEvent (awaitResult)
+
+          transformations:
+            - type: DateTime@1
+              description: Capture editor_in right before Zenon work
+              operation: Now
+              targetPath: $.ts_editor_in
+              targetValueWriteMode: Overwrite
+
+            - type: GetZenonDynamicProperties@1
+              description: List dynprop children at the given Zenon path
+              path: $.request
+              projectIdOrNamePath: projectIdOrName
+              pathPath: path
+              targetPath: $.children
+              targetValueWriteMode: Overwrite
+
+            - type: DateTime@1
+              description: Capture editor_out right after Zenon work
+              operation: Now
+              targetPath: $.ts_editor_out
+              targetValueWriteMode: Overwrite
+
+  - rtId: 69dc1117b9312035b5b759de
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: 69db94ac99233f509dd78fc5     # Editor
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "zenon-get-value"
+      - id: System/Description-1
+        value: "GetZenonDynamicProperty — single dynprop value"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromPipelineDataEvent@1
+              description: Triggered by mesh-http-value via ToPipelineDataEvent (awaitResult)
+
+          transformations:
+            - type: DateTime@1
+              description: Capture editor_in right before Zenon work
+              operation: Now
+              targetPath: $.ts_editor_in
+              targetValueWriteMode: Overwrite
+
+            - type: GetZenonDynamicProperty@1
+              description: Fetch a single Zenon dynprop value
+              path: $.request
+              projectIdOrNamePath: projectIdOrName
+              pathPath: path
+              targetPath: $.value
+              targetParameterPath: $.parameter
+              targetValueWriteMode: Overwrite
+
+            - type: DateTime@1
+              description: Capture editor_out right after Zenon work
+              operation: Now
+              targetPath: $.ts_editor_out
+              targetValueWriteMode: Overwrite
+
+  # ========================================================================
+  # Write path (added 2026-04-13)
+  # ========================================================================
+
+  - rtId: 69dd3d60e0d09bd9ad676da0
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: '670000000000000000000002'   # Mesh Adapter (blueprint default, fixed rtId)
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "mesh-http-set"
+      - id: System/Description-1
+        value: "POST /value — delegates to zenon-set-value (body: projectIdOrName, path, type, value)"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromHttpRequest@1
+              description: HTTP POST /value — body { projectIdOrName, path, type, value }
+              method: Post
+              path: /value
+
+          transformations:
+            - type: DateTime@1
+              description: Capture mesh_in inside $.body so it rides along to the editor
+              operation: Now
+              targetPath: $.body.ts_mesh_in
+              targetValueWriteMode: Overwrite
+
+            - type: ToPipelineDataEvent@1
+              description: Delegate to Editor adapter's zenon-set-value pipeline
+              path: $.body
+              targetPath: $.request
+              targetValueWriteMode: Overwrite
+              targetPipelineRtId: 69dd3d60993350009f4f8267
+              awaitResult: true
+              timeoutSeconds: 30
+              resultTargetPath: $
+
+            - type: DateTime@1
+              description: Capture mesh_out after editor result merged back
+              operation: Now
+              targetPath: $.ts_mesh_out
+              targetValueWriteMode: Overwrite
+
+  - rtId: 69dd3d60993350009f4f8267
+    ckTypeId: System.Communication/Pipeline-1
+    associations:
+      - roleId: System/ParentChild-1
+        targetRtId: 69dc1117c6107c6049764ac5
+        targetCkTypeId: System.Communication/DataFlow-1
+      - roleId: System.Communication/Executes-1
+        targetRtId: 69db94ac99233f509dd78fc5     # Editor
+        targetCkTypeId: System.Communication/Adapter-1
+    attributes:
+      - id: System/Name-1
+        value: "zenon-set-value"
+      - id: System/Description-1
+        value: "SetZenonDynamicProperty — write a single dynprop value"
+      - id: System/Enabled-1
+        value: true
+      - id: System.Communication/DeploymentState-1
+        value: 0
+      - id: System.Communication/PipelineDefinition-1
+        value: |
+          triggers:
+            - type: FromPipelineDataEvent@1
+              description: Triggered by mesh-http-set via ToPipelineDataEvent (awaitResult)
+
+          transformations:
+            - type: DateTime@1
+              description: Capture editor_in right before Zenon work
+              operation: Now
+              targetPath: $.ts_editor_in
+              targetValueWriteMode: Overwrite
+
+            - type: SetZenonDynamicProperty@1
+              description: Write a single Zenon dynprop value
+              path: $.request
+              projectIdOrNamePath: projectIdOrName
+              pathPath: path
+              typePath: type
+              valuePath: value
+              targetPath: $.result
+              targetValueWriteMode: Overwrite
+
+            - type: DateTime@1
+              description: Capture editor_out right after Zenon work
+              operation: Now
+              targetPath: $.ts_editor_out
+              targetValueWriteMode: Overwrite
+  # === property-walker UI Application (from property-walker-app.yaml) ===
+  - rtId: 50445ad116115d9529e20970
+    ckTypeId: System.Communication/Application-1
+    associations:
+    # Deploy target: the Cloud pool the central operator owns.
+    - roleId: System.Communication/Manages-1
+      targetRtId: '670000000000000000000001'
+      targetCkTypeId: System.Communication/Pool-1
+    # Chart source: the meshmakers-dev Helm repo seeded by System.Communication.
+    # 670…003 exists on both dev (kind) and test (test-2) tenants, so the chart
+    # is always pulled from the rolling dev channel.
+    - roleId: System.Communication/HelmRepository-1
+      targetRtId: '670000000000000000000003'
+      targetCkTypeId: System.Communication/HelmRepositoryConfiguration-1
+    attributes:
+    - id: System/Name-1
+      value: Property Walker
+    - id: System/Description-1
+      value: 'Zenon DynProp property-walker UI (Node proxy + static browser client). Proxies the tenant-scoped dynprop HTTP API hosted by the Mesh Adapter.'
+    - id: System.Communication/ChartName-1
+      value: property-walker
+    # Empty = always pull the newest chart from the dev repo (HelmRunner skips
+    # --version), matching the Mesh Adapter convention so rolling dev builds (and
+    # their client fixes) are picked up automatically.
+    - id: System.Communication/ChartVersion-1
+      value: ""
+    - id: System.Communication/DeploymentState-1
+      value: 0
+    # The proxy talks only to the Mesh Adapter over HTTP; it needs no MongoDB /
+    # CrateDB / RabbitMQ cluster secrets injected.
+    - id: System.Communication/ReceivesClusterSecrets-1
+      value: false
+    # Ingress — typed, operator/controller-driven, cluster-portable:
+    #   IngressEnabled=true → the operator emits ingress.enabled=true + the
+    #     resolved publicUri into the chart values.
+    #   Hostname uses the controller's {{domain.NAME}} placeholder, resolved at
+    #     DEPLOY time against OCTO_COMMUNICATIONCONTROLLER__DOMAINS__DEFAULT
+    #     (127.0.0.1.nip.io on kind, test-2.mm.cloud on test-2) — so one seed
+    #     yields the right host on every cluster. ${octo.tenantId} is resolved at
+    #     blueprint-apply; {{domain.default}} stays for the controller to fill.
+    #   className + cert-manager issuer are cluster-wide operator defaults (not
+    #     set per workload); the chart default supplies the nginx proxy-buffer-size.
+    - id: System.Communication/IngressEnabled-1
+      value: true
+    - id: System.Communication/Hostname-1
+      value: 'property-walker-${octo.tenantId}.{{domain.default}}'
+    # Base Helm values: upstreamUrl is the ONLY mandatory chart value (server.js
+    # UPSTREAM_URL); the deployment template fails up front if unset. Points at the
+    # Mesh Adapter's in-cluster HTTP server (plain HTTP :80, tenant-scoped) — the
+    # service is named {tenant}-670…002 on both kind and test-2.
+    - id: System.Communication/ValuesYaml-1
+      value: |
+        upstreamUrl: http://${octo.tenantId}-670000000000000000000002.octo.svc.cluster.local:80/${octo.tenantId}

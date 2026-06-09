@@ -1,0 +1,1775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One-Time Ticket</title>
+<style>
+/* =========================================================================
+   DESIGN SYSTEM — "Secure Terminal" aesthetic
+   Dark, geometric, classified-document feel. Corner brackets not rounded cards.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap');
+
+:root {
+  /* Base palette */
+  --bg:          #0a0c12;
+  --bg-mid:      #0f1117;
+  --bg-panel:    #141720;
+  --bg-elevated: #1a1e2e;
+  --bg-input:    #0d1019;
+
+  /* Borders */
+  --border:      #1e2333;
+  --border-dim:  #161926;
+  --border-bright: #2a3050;
+
+  /* Text */
+  --fg:          #e2e8f8;
+  --fg-dim:      #6b7799;
+  --fg-muted:    #3a4260;
+  --fg-mono:     #8bb4f8;
+
+  /* Accents */
+  --blue:        #4f8ef7;
+  --blue-dim:    #1e3a6e;
+  --blue-glow:   rgba(79, 142, 247, 0.15);
+  --teal:        #2dd4bf;
+  --teal-dim:    #0f3d38;
+  --green:       #34d399;
+  --green-dim:   #0d3325;
+  --amber:       #fbbf24;
+  --amber-dim:   #3d2e0a;
+  --red:         #f87171;
+  --red-dim:     #3d1212;
+
+  /* Typography */
+  --font-display: 'Syne', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  --font-body:    'Syne', sans-serif;
+
+  /* Geometry */
+  --radius:      2px;
+  --bracket:     8px;
+
+  /* Animation */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:  cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* ---- Reset ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ---- Noise texture overlay ---- */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* ---- Scanline effect ---- */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Views ---- */
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.view { display: none; min-height: 100vh; }
+.view.active { display: flex; flex-direction: column; }
+
+/* =========================================================================
+   DASHBOARD VIEW
+   ========================================================================= */
+
+.dashboard-layout {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+/* ---- Top bar ---- */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-mid);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  opacity: 0.3;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.brand-name span {
+  color: var(--blue);
+}
+
+.brand-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-muted);
+  letter-spacing: 0.05em;
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: var(--radius);
+}
+
+.topbar-spacer { flex: 1; }
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse-dot 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+  50%       { opacity: 0.4; box-shadow: 0 0 2px var(--green); }
+}
+
+.topbar-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-dim);
+  letter-spacing: 0.04em;
+}
+
+/* ---- Dashboard body ---- */
+.dashboard-body {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 0;
+  min-height: 0;
+}
+
+.panel-left {
+  border-right: 1px solid var(--border);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background: var(--bg-panel);
+}
+
+.panel-right {
+  padding: 32px 36px;
+  overflow-y: auto;
+}
+
+/* ---- Section headers ---- */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.section-icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--blue);
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+/* ---- Corner-bracket container ---- */
+.bracket-box {
+  position: relative;
+  padding: 20px 18px;
+  background: var(--bg-elevated);
+}
+
+.bracket-box::before,
+.bracket-box::after,
+.bracket-box > .bc-bl,
+.bracket-box > .bc-br {
+  content: '';
+  position: absolute;
+  width: var(--bracket);
+  height: var(--bracket);
+}
+
+.bracket-box::before {
+  top: 0; left: 0;
+  border-top: 1px solid var(--blue-dim);
+  border-left: 1px solid var(--blue-dim);
+}
+
+.bracket-box::after {
+  top: 0; right: 0;
+  border-top: 1px solid var(--blue-dim);
+  border-right: 1px solid var(--blue-dim);
+}
+
+.bracket-box > .bc-bl {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0;
+  width: var(--bracket);
+  height: var(--bracket);
+  border-bottom: 1px solid var(--blue-dim);
+  border-left: 1px solid var(--blue-dim);
+}
+
+.bracket-box > .bc-br {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: var(--bracket);
+  height: var(--bracket);
+  border-bottom: 1px solid var(--blue-dim);
+  border-right: 1px solid var(--blue-dim);
+}
+
+/* ---- Form ---- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.form-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  border-radius: var(--radius);
+  width: 100%;
+}
+
+.form-input::placeholder {
+  color: var(--fg-muted);
+}
+
+.form-input:focus {
+  border-color: var(--blue-dim);
+  box-shadow: 0 0 0 3px var(--blue-glow), inset 0 0 0 1px rgba(79,142,247,0.1);
+}
+
+.form-input.secret-input {
+  letter-spacing: 0.05em;
+  color: var(--fg-mono);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.15s var(--ease-out);
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  width: 100%;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #6fa3f9;
+  box-shadow: 0 0 20px rgba(79,142,247,0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border-bright);
+  background: rgba(255,255,255,0.03);
+}
+
+.btn-icon {
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  padding: 6px 8px;
+  font-size: 11px;
+  border-radius: var(--radius);
+}
+
+.btn-icon:hover:not(:disabled) {
+  color: var(--fg-dim);
+  background: rgba(255,255,255,0.04);
+}
+
+/* ---- Success result box ---- */
+.result-box {
+  display: none;
+  margin-top: 16px;
+}
+
+.result-box.show { display: block; }
+
+.result-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.result-label::before {
+  content: '✓';
+  font-size: 12px;
+}
+
+.result-link-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--teal-dim);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.result-link-url {
+  flex: 1;
+  background: rgba(45,212,191,0.05);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--teal);
+  padding: 10px 12px;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.result-copy-btn {
+  flex-shrink: 0;
+  background: var(--teal-dim);
+  border: none;
+  border-left: 1px solid var(--teal-dim);
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.result-copy-btn:hover {
+  background: rgba(45,212,191,0.2);
+  color: var(--fg);
+}
+
+.result-copy-btn.copied {
+  color: var(--green);
+  background: rgba(52,211,153,0.1);
+}
+
+/* ---- Form error ---- */
+.form-error {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.2);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-top: 12px;
+}
+
+.form-error.show { display: block; }
+
+/* ---- Tickets table / list ---- */
+.tickets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.tickets-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  letter-spacing: 0.05em;
+}
+
+.tickets-count span {
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover {
+  color: var(--fg);
+  border-color: var(--border-bright);
+}
+
+.refresh-btn.spinning .icon-refresh {
+  animation: spin 0.6s linear;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Ticket items ---- */
+.tickets-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--fg-muted);
+}
+
+.tickets-empty-icon {
+  font-size: 32px;
+  margin-bottom: 14px;
+  opacity: 0.3;
+}
+
+.tickets-empty-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+
+.tickets-empty-sub {
+  font-size: 12px;
+  color: var(--fg-muted);
+  opacity: 0.6;
+}
+
+.tickets-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 12px;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-bright);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner.sm {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+}
+
+/* Column headers */
+.ticket-cols-header {
+  display: grid;
+  grid-template-columns: 1fr 110px 180px 36px;
+  gap: 12px;
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 4px;
+}
+
+.col-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* Individual ticket row */
+.ticket-item {
+  display: grid;
+  grid-template-columns: 1fr 110px 180px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--border-dim);
+  transition: background 0.12s, border-color 0.12s;
+  animation: slideIn 0.2s var(--ease-out) both;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ticket-item:hover {
+  background: rgba(255,255,255,0.02);
+  border-color: transparent;
+  border-bottom-color: var(--border);
+}
+
+.ticket-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-muted);
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.chip::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chip-open {
+  background: rgba(52,211,153,0.1);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,0.2);
+}
+
+.chip-open::before { background: var(--green); box-shadow: 0 0 4px var(--green); }
+
+.chip-redeemed {
+  background: rgba(107,119,153,0.1);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+
+.chip-redeemed::before { background: var(--fg-muted); }
+
+.ticket-date {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-date.redeemed-at {
+  color: var(--fg-dim);
+}
+
+.ticket-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Copy link button in table */
+.copy-link-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+}
+
+.copy-link-btn:hover {
+  color: var(--teal);
+  border-color: var(--teal-dim);
+  background: rgba(45,212,191,0.05);
+}
+
+.copy-link-btn.copied {
+  color: var(--green);
+  border-color: rgba(52,211,153,0.3);
+}
+
+/* =========================================================================
+   REDEEM VIEW
+   ========================================================================= */
+
+.redeem-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 20px;
+  position: relative;
+}
+
+/* Radial glow background */
+.redeem-layout::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(ellipse at center, rgba(79,142,247,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.redeem-card {
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Animated corner brackets for redeem card */
+.redeem-card .bracket-box {
+  padding: 40px 36px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+
+.redeem-card .bracket-box::before,
+.redeem-card .bracket-box::after,
+.redeem-card .bracket-box > .bc-bl,
+.redeem-card .bracket-box > .bc-br {
+  width: 16px;
+  height: 16px;
+  transition: border-color 0.3s;
+}
+
+.redeem-card .bracket-box::before,
+.redeem-card .bracket-box::after,
+.redeem-card .bracket-box > .bc-bl,
+.redeem-card .bracket-box > .bc-br {
+  border-color: var(--blue);
+}
+
+.redeem-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.redeem-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 1px;
+  background: var(--fg-muted);
+}
+
+.redeem-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.03em;
+  color: var(--fg);
+  margin-bottom: 6px;
+}
+
+.redeem-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--blue);
+  letter-spacing: 0.06em;
+  background: var(--blue-glow);
+  border: 1px solid var(--blue-dim);
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  display: inline-block;
+  margin-bottom: 32px;
+  max-width: 100%;
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The big reveal button */
+.reveal-btn {
+  width: 100%;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, var(--blue-dim) 0%, rgba(79,142,247,0.2) 100%);
+  border: 1px solid var(--blue);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.reveal-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(79,142,247,0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.reveal-btn:hover:not(:disabled)::before { opacity: 1; }
+.reveal-btn:hover:not(:disabled) {
+  box-shadow: 0 0 30px rgba(79,142,247,0.3), 0 0 60px rgba(79,142,247,0.1);
+  transform: translateY(-1px);
+}
+
+.reveal-btn:active:not(:disabled) { transform: translateY(0); }
+
+.reveal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pulsing ring on reveal button */
+.reveal-btn-ring {
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--radius);
+  border: 1px solid var(--blue);
+  animation: ring-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%   { opacity: 0.6; transform: scale(1); }
+  50%  { opacity: 0; transform: scale(1.015); }
+  100% { opacity: 0.6; transform: scale(1); }
+}
+
+.reveal-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ---- Success state ---- */
+.redeem-success {
+  display: none;
+  margin-top: 28px;
+  animation: fadeIn 0.3s var(--ease-out);
+}
+
+.redeem-success.show { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.secret-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.secret-label svg { flex-shrink: 0; }
+
+.secret-box-wrapper {
+  border: 1px solid var(--teal-dim);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.secret-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--teal);
+  background: rgba(45,212,191,0.04);
+  padding: 14px 14px 14px 16px;
+  word-break: break-all;
+  line-height: 1.6;
+  user-select: all;
+  letter-spacing: 0.04em;
+  min-height: 48px;
+}
+
+.secret-copy-row {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--teal-dim);
+  background: rgba(45,212,191,0.03);
+}
+
+.secret-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+}
+
+.secret-copy-btn:hover { color: var(--fg); }
+.secret-copy-btn.copied { color: var(--green); }
+
+.redeem-warning {
+  display: flex;
+  gap: 10px;
+  background: var(--amber-dim);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--amber);
+  line-height: 1.5;
+}
+
+.warning-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-top: 1px;
+}
+
+/* ---- Error state ---- */
+.redeem-error {
+  display: none;
+  margin-top: 28px;
+}
+
+.redeem-error.show { display: block; }
+
+.error-card {
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.25);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.error-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--red);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+
+.error-sub {
+  font-size: 12px;
+  color: rgba(248,113,113,0.6);
+  line-height: 1.5;
+}
+
+/* ---- Redeem footer ---- */
+.redeem-footer {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.powered-by {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.powered-by span {
+  color: var(--blue);
+  opacity: 1;
+}
+
+/* =========================================================================
+   UTILITIES & RESPONSIVE
+   ========================================================================= */
+
+/* Tooltip for copy feedback */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s, transform 0.1s;
+  letter-spacing: 0.04em;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+@media (max-width: 900px) {
+  .dashboard-body { grid-template-columns: 1fr; }
+  .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
+  .ticket-cols-header,
+  .ticket-item { grid-template-columns: 1fr 90px 150px 32px; }
+}
+
+@media (max-width: 600px) {
+  .topbar { padding: 0 16px; }
+  .panel-left { padding: 24px 16px; }
+  .panel-right { padding: 24px 16px; }
+  .ticket-cols-header { display: none; }
+  .ticket-item { grid-template-columns: 1fr auto auto; grid-template-rows: auto auto; }
+  .ticket-date { display: none; }
+  .redeem-card .bracket-box { padding: 32px 20px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================================================================
+       DASHBOARD VIEW (#/)
+       =================================================================== -->
+  <div id="view-dashboard" class="view">
+    <div class="dashboard-layout">
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-name">One&#8209;<span>Time</span> Ticket</div>
+          <div class="brand-tag">v1.0</div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="status-dot"></div>
+        <div class="topbar-label">powered by OctoMesh</div>
+      </header>
+
+      <!-- Two-column body -->
+      <div class="dashboard-body">
+
+        <!-- LEFT: create form -->
+        <div class="panel-left">
+
+          <div>
+            <div class="section-header">
+              <div class="section-icon">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="2" y="7" width="12" height="8" rx="1"/>
+                  <path d="M5 7V5a3 3 0 0 1 6 0v2"/>
+                </svg>
+              </div>
+              <div class="section-title">Issue New Ticket</div>
+            </div>
+
+            <div class="bracket-box">
+              <div class="bc-bl"></div>
+              <div class="bc-br"></div>
+
+              <div class="form-group">
+                <label class="form-label" for="inp-name">Ticket Name</label>
+                <input
+                  id="inp-name"
+                  class="form-input"
+                  type="text"
+                  placeholder="e.g. API key for Alice"
+                  autocomplete="off"
+                  spellcheck="false"
+                >
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="inp-secret">Secret</label>
+                <input
+                  id="inp-secret"
+                  class="form-input secret-input"
+                  type="text"
+                  placeholder="The value to reveal once…"
+                  autocomplete="off"
+                  spellcheck="false"
+                >
+              </div>
+
+              <button id="btn-create" class="btn btn-primary" style="margin-top:4px">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M8 2v12M2 8h12"/>
+                </svg>
+                Create Ticket
+              </button>
+
+              <div id="create-error" class="form-error"></div>
+            </div>
+
+            <!-- Success result -->
+            <div id="result-box" class="result-box">
+              <div class="result-label">Ticket created — share this link</div>
+              <div class="result-link-row">
+                <div id="result-url" class="result-link-url"></div>
+                <button id="result-copy" class="result-copy-btn">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="5" y="5" width="9" height="9" rx="1"/>
+                    <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>
+                  </svg>
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info block -->
+          <div style="border-top: 1px solid var(--border-dim); padding-top: 20px;">
+            <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 12px;">How it works</div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="font-family: var(--font-mono); font-size: 10px; color: var(--blue); background: var(--blue-glow); border: 1px solid var(--blue-dim); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; border-radius: 2px;">1</div>
+                <div style="font-size: 12px; color: var(--fg-dim); line-height: 1.5;">Create a ticket with a name and secret value (an API key, password, or any string).</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="font-family: var(--font-mono); font-size: 10px; color: var(--blue); background: var(--blue-glow); border: 1px solid var(--blue-dim); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; border-radius: 2px;">2</div>
+                <div style="font-size: 12px; color: var(--fg-dim); line-height: 1.5;">Share the generated link with the intended recipient.</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="font-family: var(--font-mono); font-size: 10px; color: var(--blue); background: var(--blue-glow); border: 1px solid var(--blue-dim); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; border-radius: 2px;">3</div>
+                <div style="font-size: 12px; color: var(--fg-dim); line-height: 1.5;">The recipient clicks "Reveal Secret" <em>once</em>. After that the ticket is permanently closed.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: ticket list -->
+        <div class="panel-right">
+          <div class="tickets-header">
+            <div class="section-header" style="margin-bottom: 0;">
+              <div class="section-icon">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="1" y="3" width="14" height="10" rx="1"/>
+                  <path d="M5 3v10M11 3v10"/>
+                  <circle cx="11" cy="8" r="1.5" fill="currentColor" stroke="none"/>
+                </svg>
+              </div>
+              <div class="section-title">Issued Tickets</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div id="tickets-count" class="tickets-count"></div>
+              <button id="btn-refresh" class="refresh-btn">
+                <svg class="icon-refresh" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 8A6 6 0 1 1 8 2"/>
+                  <path d="M14 2v6h-6" fill="currentColor" stroke="none"/>
+                  <path d="M14 2l-0.001 6h-5.999"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Column labels -->
+          <div class="ticket-cols-header">
+            <div class="col-label">Name / ID</div>
+            <div class="col-label">Status</div>
+            <div class="col-label">Redeemed At</div>
+            <div class="col-label"></div>
+          </div>
+
+          <div id="tickets-list"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================
+       REDEEM VIEW (#/redeem/<id>)
+       =================================================================== -->
+  <div id="view-redeem" class="view">
+    <div class="redeem-layout">
+
+      <div class="redeem-card">
+        <div class="bracket-box">
+          <div class="bc-bl"></div>
+          <div class="bc-br"></div>
+
+          <div class="redeem-eyebrow">Secure Delivery</div>
+          <div class="redeem-title">Claim Your Secret</div>
+          <div id="redeem-id-display" class="redeem-id"></div>
+
+          <button id="btn-reveal" class="reveal-btn">
+            <div class="reveal-btn-ring"></div>
+            <span class="reveal-icon">&#128273;</span>
+            <span id="reveal-btn-label">Reveal Secret</span>
+          </button>
+
+          <!-- Success state -->
+          <div id="redeem-success" class="redeem-success">
+            <div class="secret-label">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M13 4L6 11l-3-3"/>
+              </svg>
+              Secret Revealed
+            </div>
+            <div class="secret-box-wrapper">
+              <div id="secret-value" class="secret-value"></div>
+              <div class="secret-copy-row">
+                <button id="secret-copy-btn" class="secret-copy-btn">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="5" y="5" width="9" height="9" rx="1"/>
+                    <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>
+                  </svg>
+                  Copy to clipboard
+                </button>
+              </div>
+            </div>
+            <div class="redeem-warning">
+              <div class="warning-icon">&#9888;&#65039;</div>
+              <div>This secret was shown exactly once — it is no longer retrievable. Store it securely now.</div>
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div id="redeem-error" class="redeem-error">
+            <div class="error-card">
+              <div class="error-icon">&#128683;</div>
+              <div class="error-title" id="redeem-error-title">Ticket Unavailable</div>
+              <div class="error-sub" id="redeem-error-sub">This ticket has already been redeemed or does not exist. Each ticket can only be revealed once.</div>
+            </div>
+          </div>
+
+        </div><!-- .bracket-box -->
+      </div><!-- .redeem-card -->
+
+      <div class="redeem-footer">
+        <div class="powered-by">powered by <span>OctoMesh</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
+function el(id)  { return document.getElementById(id); }
+function qs(sel) { return document.querySelector(sel); }
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(path, {
+    headers: { 'content-type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  let body;
+  try { body = await r.json(); } catch { body = {}; }
+  return { ok: r.ok, status: r.status, body };
+}
+
+// Normalise a ticket from whatever shape the backend returns.
+function normalizeTicket(t) {
+  if (!t) return null;
+  const id        = t.ticketId ?? t.TicketId ?? t.rtId ?? t.RtId ?? t.id ?? t.Id ?? '';
+  const name      = t.name      ?? t.Name      ?? '';
+  const redeemed  = t.redeemed  ?? t.Redeemed  ?? false;
+  const redeemedAt= t.redeemedAt ?? t.RedeemedAt ?? null;
+  return { id, name, redeemed, redeemedAt };
+}
+
+// Normalise a create-ticket response — returns the id string or null.
+function extractCreatedId(body) {
+  if (!body) return null;
+  const raw = body.ticketId ?? body.TicketId
+            ?? body.rtId    ?? body.RtId
+            ?? body.id      ?? body.Id
+            ?? body.ticket?.ticketId ?? body.ticket?.id
+            ?? body.data?.ticketId  ?? body.data?.id;
+  return raw ? String(raw) : null;
+}
+
+// Normalise the redeem response.
+function extractRedeemResult(body) {
+  if (!body) return { ok: false, error: 'unknown' };
+  const secret = body.secret ?? body.Secret ?? body.value ?? body.Value ?? null;
+  const error  = body.error  ?? body.Error  ?? body.errorCode ?? body.ErrorCode ?? null;
+  if (secret != null) return { ok: true, secret: String(secret) };
+  if (error)          return { ok: false, error: String(error) };
+  return { ok: false, error: 'unknown' };
+}
+
+// Format a date/ISO string for display.
+function fmtDate(raw) {
+  if (!raw) return '—';
+  try {
+    const d = new Date(raw);
+    if (isNaN(d)) return String(raw);
+    return d.toLocaleString(undefined, {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return String(raw); }
+}
+
+// Truncate a string for display (keep start + end).
+function trunc(s, maxLen = 28) {
+  if (!s || s.length <= maxLen) return s;
+  return s.slice(0, 10) + '…' + s.slice(-8);
+}
+
+// Clipboard helper with visual feedback.
+function copyText(text, btn, defaultLabel = 'Copy') {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = defaultLabel;
+      btn.classList.remove('copied');
+    }, 1800);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = defaultLabel;
+      btn.classList.remove('copied');
+    }, 1800);
+  });
+}
+
+// Decrypt-like char-by-char reveal animation.
+function animateReveal(target, finalText) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let frame = 0;
+  const totalFrames = Math.max(12, Math.floor(finalText.length * 1.5));
+  target.textContent = finalText.slice(0, 1).replace(/./g, '?');
+
+  const id = setInterval(() => {
+    frame++;
+    const revealed = Math.floor((frame / totalFrames) * finalText.length);
+    const noise = Array.from({ length: Math.max(0, finalText.length - revealed) }, () =>
+      chars[Math.floor(Math.random() * chars.length)]
+    ).join('');
+    target.textContent = finalText.slice(0, revealed) + noise;
+    if (frame >= totalFrames) {
+      target.textContent = finalText;
+      clearInterval(id);
+    }
+  }, 35);
+}
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
+
+const views = {
+  dashboard: el('view-dashboard'),
+  redeem:    el('view-redeem'),
+};
+
+function showView(name) {
+  Object.values(views).forEach(v => v.classList.remove('active'));
+  if (views[name]) views[name].classList.add('active');
+}
+
+function route() {
+  const hash = location.hash || '#/';
+
+  if (hash.startsWith('#/redeem/')) {
+    const id = decodeURIComponent(hash.slice('#/redeem/'.length));
+    initRedeemView(id);
+    showView('redeem');
+  } else {
+    initDashboardView();
+    showView('dashboard');
+  }
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('load',       route);
+
+// ---------------------------------------------------------------------------
+// DASHBOARD
+// ---------------------------------------------------------------------------
+
+let dashboardInited = false;
+
+function initDashboardView() {
+  if (!dashboardInited) {
+    dashboardInited = true;
+    bindCreateForm();
+    bindRefreshBtn();
+  }
+  loadTickets();
+}
+
+function bindCreateForm() {
+  el('btn-create').addEventListener('click', submitCreate);
+  el('inp-secret').addEventListener('keydown', e => { if (e.key === 'Enter') submitCreate(); });
+  el('inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') el('inp-secret').focus(); });
+}
+
+function bindRefreshBtn() {
+  el('btn-refresh').addEventListener('click', () => {
+    el('btn-refresh').classList.add('spinning');
+    loadTickets().finally(() => el('btn-refresh').classList.remove('spinning'));
+  });
+}
+
+async function submitCreate() {
+  const name   = el('inp-name').value.trim();
+  const secret = el('inp-secret').value;
+  const errEl  = el('create-error');
+  const resultBox = el('result-box');
+
+  errEl.classList.remove('show');
+  resultBox.classList.remove('show');
+
+  if (!name) {
+    errEl.textContent = 'Name is required.';
+    errEl.classList.add('show');
+    el('inp-name').focus();
+    return;
+  }
+  if (!secret) {
+    errEl.textContent = 'Secret is required.';
+    errEl.classList.add('show');
+    el('inp-secret').focus();
+    return;
+  }
+
+  const btn = el('btn-create');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner sm"></div>Creating…';
+
+  try {
+    const { ok, body } = await apiFetch('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ name, secret }),
+    });
+
+    if (!ok) {
+      const msg = body?.error?.message ?? body?.error ?? body?.message ?? ('Server error ' + (body?.status || ''));
+      errEl.textContent = String(msg) || 'Failed to create ticket.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const id = extractCreatedId(body);
+    if (!id) {
+      errEl.textContent = 'Ticket created but no ID returned. Check backend logs.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const link = location.origin + '/#/redeem/' + encodeURIComponent(id);
+    el('result-url').textContent = link;
+    resultBox.classList.add('show');
+
+    // Wire copy button
+    const copyBtn = el('result-copy');
+    copyBtn.onclick = () => copyText(link, copyBtn, 'Copy');
+
+    // Clear form
+    el('inp-name').value   = '';
+    el('inp-secret').value = '';
+
+    // Refresh list
+    await loadTickets();
+
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 2v12M2 8h12"/>
+      </svg>
+      Create Ticket`;
+  }
+}
+
+async function loadTickets() {
+  const list = el('tickets-list');
+  const countEl = el('tickets-count');
+  list.innerHTML = '<div class="tickets-loading"><div class="spinner"></div><span>Loading tickets…</span></div>';
+  countEl.innerHTML = '';
+
+  try {
+    const { ok, body } = await apiFetch('/api/tickets');
+
+    if (!ok) {
+      list.innerHTML = `<div class="tickets-empty">
+        <div class="tickets-empty-icon">&#9888;</div>
+        <div class="tickets-empty-title">Could not load tickets</div>
+        <div class="tickets-empty-sub">${escHtml(String(body?.error ?? 'Server error'))}</div>
+      </div>`;
+      return;
+    }
+
+    // Accept array at root or nested under various keys
+    const raw = Array.isArray(body)
+      ? body
+      : body?.tickets ?? body?.data ?? body?.items ?? body?.result ?? [];
+
+    const tickets = (Array.isArray(raw) ? raw : []).map(normalizeTicket).filter(Boolean);
+    renderTickets(tickets, list, countEl);
+
+  } catch (e) {
+    list.innerHTML = `<div class="tickets-empty">
+      <div class="tickets-empty-icon">&#128268;</div>
+      <div class="tickets-empty-title">Upstream unreachable</div>
+      <div class="tickets-empty-sub">${escHtml(e.message)}</div>
+    </div>`;
+  }
+}
+
+function renderTickets(tickets, list, countEl) {
+  const open     = tickets.filter(t => !t.redeemed).length;
+  const redeemed = tickets.filter(t => t.redeemed).length;
+
+  countEl.innerHTML = tickets.length === 0
+    ? ''
+    : `<span>${tickets.length}</span> total &nbsp;·&nbsp; <span style="color:var(--green)">${open}</span> open &nbsp;·&nbsp; <span>${redeemed}</span> redeemed`;
+
+  if (tickets.length === 0) {
+    list.innerHTML = `<div class="tickets-empty">
+      <div class="tickets-empty-icon">&#127902;</div>
+      <div class="tickets-empty-title">No tickets yet</div>
+      <div class="tickets-empty-sub">Create your first ticket using the form on the left.</div>
+    </div>`;
+    return;
+  }
+
+  // Sort: open first, then by id (newest last is typical for append stores)
+  const sorted = [...tickets].sort((a, b) => {
+    if (a.redeemed !== b.redeemed) return a.redeemed ? 1 : -1;
+    return 0;
+  });
+
+  list.innerHTML = '';
+  sorted.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'ticket-item';
+    const link = location.origin + '/#/redeem/' + encodeURIComponent(t.id);
+
+    row.innerHTML = `
+      <div>
+        <div class="ticket-name">${escHtml(t.name || '(unnamed)')}</div>
+        <div class="ticket-id">${escHtml(trunc(t.id, 32))}</div>
+      </div>
+      <div>
+        ${t.redeemed
+          ? '<span class="chip chip-redeemed">Redeemed</span>'
+          : '<span class="chip chip-open">Open</span>'}
+      </div>
+      <div class="ticket-date ${t.redeemed ? 'redeemed-at' : ''}">
+        ${t.redeemed ? fmtDate(t.redeemedAt) : '—'}
+      </div>
+      <div class="ticket-actions">
+        ${!t.redeemed
+          ? `<button class="copy-link-btn" data-tooltip="Copy redeem link" data-link="${escHtml(link)}">
+               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                 <rect x="5" y="5" width="9" height="9" rx="1"/>
+                 <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>
+               </svg>
+             </button>`
+          : ''}
+      </div>
+    `;
+
+    if (!t.redeemed) {
+      const copyBtn = row.querySelector('.copy-link-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+          copyText(link, copyBtn, '');
+          // Restore icon after copy feedback
+          setTimeout(() => {
+            copyBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="5" y="5" width="9" height="9" rx="1"/>
+              <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>
+            </svg>`;
+          }, 2000);
+        });
+      }
+    }
+
+    list.appendChild(row);
+  });
+}
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ---------------------------------------------------------------------------
+// REDEEM VIEW
+// ---------------------------------------------------------------------------
+
+function initRedeemView(id) {
+  // Reset state
+  el('redeem-success').classList.remove('show');
+  el('redeem-error').classList.remove('show');
+  el('btn-reveal').disabled = false;
+  el('reveal-btn-label').textContent = 'Reveal Secret';
+  el('btn-reveal').querySelector('.reveal-icon').textContent = '🔑';
+
+  el('redeem-id-display').textContent = id || '(no id)';
+
+  const btn = el('btn-reveal');
+
+  // Remove old listener by cloning
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, newBtn.parentNode === btn.parentNode ? newBtn : btn);
+  // Re-query after clone
+  const revealBtn = el('btn-reveal');
+
+  revealBtn.addEventListener('click', async () => {
+    if (!id) return;
+
+    revealBtn.disabled = true;
+    el('reveal-btn-label').textContent = 'Revealing…';
+    revealBtn.querySelector('.reveal-icon').textContent = '';
+    revealBtn.querySelector('.reveal-icon').innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>';
+
+    try {
+      const { ok, status, body } = await apiFetch('/api/redeem?id=' + encodeURIComponent(id));
+      const result = extractRedeemResult(body);
+
+      if (ok && result.ok) {
+        // Show success + animate reveal
+        el('redeem-success').classList.add('show');
+        animateReveal(el('secret-value'), result.secret);
+
+        // Wire copy
+        const copyBtn = el('secret-copy-btn');
+        copyBtn.onclick = () => copyText(result.secret, copyBtn, 'Copy to clipboard');
+
+        revealBtn.disabled = true;
+        el('reveal-btn-label').textContent = 'Revealed';
+        revealBtn.querySelector('.reveal-icon').innerHTML = '✓';
+
+      } else {
+        // Error
+        let title = 'Ticket Unavailable';
+        let sub   = 'This ticket has already been redeemed or does not exist. Each ticket can only be revealed once.';
+
+        if (result.error === 'already_redeemed') {
+          title = 'Already Redeemed';
+          sub   = 'This ticket was already claimed. Each ticket can only be revealed once — the secret is no longer accessible.';
+        } else if (result.error === 'not_found' || status === 404) {
+          title = 'Ticket Not Found';
+          sub   = 'This ticket ID does not exist. Please check the link you received.';
+        }
+
+        el('redeem-error-title').textContent = title;
+        el('redeem-error-sub').textContent   = sub;
+        el('redeem-error').classList.add('show');
+
+        revealBtn.disabled = true;
+        el('reveal-btn-label').textContent = 'Unavailable';
+        revealBtn.querySelector('.reveal-icon').innerHTML = '✕';
+      }
+
+    } catch (e) {
+      el('redeem-error-title').textContent = 'Connection Error';
+      el('redeem-error-sub').textContent   = 'Could not reach the server. Please check your connection and try again.';
+      el('redeem-error').classList.add('show');
+      revealBtn.disabled = false;
+      el('reveal-btn-label').textContent = 'Reveal Secret';
+      revealBtn.querySelector('.reveal-icon').textContent = '🔑';
+    }
+  });
+}
+</script>
+</body>
+</html>

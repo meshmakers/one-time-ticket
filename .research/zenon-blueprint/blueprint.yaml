@@ -1,0 +1,40 @@
+$schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
+blueprintId: ZenonDynprop.MainLatest-1.0.0
+description: |
+  Zenon DynProp API — the whole app as one installable bundle: the Editor
+  adapter, the DataFlow with its 8 ETL pipelines, and the property-walker UI
+  Application (rolled out by the Communication Operator as a Helm release).
+
+  Single bundle for the dev/test channel — deployable to local kind (dev) and to
+  the test-2 cluster (test). Both run the Communication Operator, seed the dev
+  Helm repo (HelmRepositoryConfiguration 670000000000000000000003), inject the
+  internal image registry (docker.mm.cloud), and have the mm-cloud-issuer
+  ClusterIssuer — so the same seed works on both. Tenant-specific values are
+  templated with ${octo.tenantId}; the only environment difference is the ingress
+  host (see seed-data: it uses the test-2 *.test-2.mm.cloud pattern; on kind reach
+  the UI via port-forward).
+
+  Admin-installable: it lives outside the embedded service package so a catalog
+  (LocalFileSystem or GitHub) can publish it.
+
+  PREREQUISITE: communication must be enabled on the target tenant. The
+  service-managed System.Communication blueprint auto-seeds the Pool
+  (670000000000000000000001), Mesh Adapter (670000000000000000000002) and dev
+  Helm repo (670000000000000000000003) this app's seed associates to. It is NOT
+  declared as a blueprintDependency because it is not catalog-discoverable from
+  the asset-repo and is always already present on a comm-enabled tenant; the
+  seed's associations resolve against those existing entities at import.
+
+  Install only seeds entities — trigger the rollout afterwards with
+  DeployWorkload (the UI Application) + DeployDataFlow (the pipelines), then
+  connect the Zenon Editor addin for live data.
+
+seedDataPath: seed-data/entities.yaml
+
+# Gate to the dev/test channel: kind (dev) + test-2 (test). Staging/production are
+# excluded — staging runs the older pre-operator deploy model (no Communication
+# Operator), so the DeployWorkload -> Helm rollout step would not run there.
+requires:
+  octo.environment:
+    - dev
+    - test
