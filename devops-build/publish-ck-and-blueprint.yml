@@ -1,24 +1,23 @@
 # Compile + validate on every branch; publish to the shared GitHub catalogs
 # on main only (publishToCatalogs gate set in azure-pipelines.yml).
-# All steps run in $(OctoToolsCwd) so the tools pick up the job-scoped
-# appsettings.json written by install-octo-tools.yml.
+# Catalog credentials come from the user-profile settings files written by
+# install-octo-tools.yml (and removed by remove-octo-tool-config.yml).
 steps:
   - task: Bash@3
     displayName: Compile CK model Demo.Tickets
     inputs:
       targetType: inline
-      workingDirectory: $(OctoToolsCwd)
       script: |
         set -e
-        # -lce false: resolve the System-[2.0,3.0) dependency from the GitHub
-        # catalogs, never from local agent state
-        octo-ckc -c Compile -p "$(Build.SourcesDirectory)/ck/ConstructionKit" -o "$(Build.SourcesDirectory)/ck/out" -lce false
+        # Local FS catalog is disabled via ~/.octo-ckc/settings.json, so the
+        # System-[2.0,3.0) dependency resolves from the GitHub catalogs.
+        # (Not via "-lce false" - see note in install-octo-tools.yml.)
+        octo-ckc -c Compile -p "$(Build.SourcesDirectory)/ck/ConstructionKit" -o "$(Build.SourcesDirectory)/ck/out"
 
   - task: Bash@3
     displayName: Validate blueprint OneTimeTicket-1.0.0
     inputs:
       targetType: inline
-      workingDirectory: $(OctoToolsCwd)
       script: |
         set -e
         octo-bpm -c validate -p "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/1.0.0"
@@ -29,7 +28,6 @@ steps:
     condition: and(succeeded(), eq(variables.publishToCatalogs, 'true'))
     inputs:
       targetType: inline
-      workingDirectory: $(OctoToolsCwd)
       script: |
         set -e
         # --catalog (not -c): -c is taken by the command selector
@@ -40,7 +38,6 @@ steps:
     condition: and(succeeded(), eq(variables.publishToCatalogs, 'true'))
     inputs:
       targetType: inline
-      workingDirectory: $(OctoToolsCwd)
       script: |
         set -eo pipefail
         # octo-bpm logs publish failures but can still exit 0 - require the

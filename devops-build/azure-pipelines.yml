@@ -68,3 +68,4 @@ stages:
               ExtraTag: $(AppImageVersion)
 
           - template: handle-artifacts.yml
+          - template: remove-octo-tool-config.yml

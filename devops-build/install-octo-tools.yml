@@ -1,8 +1,13 @@
-# Installs octo-ckc + octo-bpm from the private NuGet feed and writes a
-# job-scoped catalog config. Both tools read appsettings.json from their
-# working directory (sections: PublicOctoGitHub / PrivateOctoGitHub /
-# LocalFileSystemCatalog); GitHub repo/owner/Pages defaults are built in,
-# only the write token must be supplied.
+# Installs octo-ckc + octo-bpm from the private NuGet feed and writes their
+# user-profile settings files (~/.octo-ckc/settings.json, ~/.octo-bpm/settings.json),
+# which the tools always read regardless of working directory. Sections:
+# PublicOctoGitHub / PrivateOctoGitHub / LocalFileSystemCatalog; GitHub
+# repo/owner/Pages defaults are built in, only the write token must be supplied.
+# The files contain the PAT, so remove-octo-tool-config.yml must run at job end.
+#
+# Note: do NOT use octo-ckc's "-lce false" flag instead of the settings file -
+# in 3.3.x it disables the local catalog only AFTER construction, which crashes
+# dependency resolution on agents without a warm catalog cache.
 steps:
   - task: Bash@3
     displayName: Install octo-ckc and octo-bpm from private feed
@@ -17,22 +22,31 @@ steps:
         echo "##vso[task.prependpath]$TOOLDIR"
 
   - task: Bash@3
-    displayName: Write catalog config (job-scoped, not persisted on agent)
+    displayName: Write octo tool settings (cleaned up at job end)
     env:
-      GITHUB_PAT: $(GitHubPAT) # secret -> env; deliberately NOT "octo-ckc -c Config", which would persist the PAT in the agent user profile
+      GITHUB_PAT: $(GitHubPAT) # secret -> env, never echoed
     inputs:
       targetType: inline
       script: |
         set -e
-        CFGDIR="$(Agent.TempDirectory)/octo-config"
-        mkdir -p "$CFGDIR"
-        cat > "$CFGDIR/appsettings.json" <<EOF
+        mkdir -p ~/.octo-ckc ~/.octo-bpm
+        # CK compiler: disable the local FS catalog so the System dependency
+        # resolves from the GitHub catalogs, never from stale agent state.
+        cat > ~/.octo-ckc/settings.json <<EOF
         {
           "PublicOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" },
           "PrivateOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" },
           "LocalFileSystemCatalog": { "IsEnabled": false }
         }
         EOF
-        echo "##vso[task.setvariable variable=OctoToolsCwd]$CFGDIR"
+        # Blueprint manager: local catalog stays enabled (publish targets the
+        # GitHub catalog explicitly; an empty local catalog is harmless).
+        cat > ~/.octo-bpm/settings.json <<EOF
+        {
+          "PublicOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" },
+          "PrivateOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" }
+        }
+        EOF
+        echo "settings written: ckc $(wc -c < ~/.octo-ckc/settings.json) bytes, bpm $(wc -c < ~/.octo-bpm/settings.json) bytes"
         # Catalog caches never self-refresh once present - always start clean
         rm -rf ~/.octo/ck-catalog/cache ~/.octo/blueprint-catalog/cache

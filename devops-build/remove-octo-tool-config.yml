@@ -1,0 +1,9 @@
+# The settings files written by install-octo-tools.yml contain the GitHub PAT -
+# remove them even when the build fails.
+steps:
+  - task: Bash@3
+    displayName: Remove octo tool settings
+    condition: always()
+    inputs:
+      targetType: inline
+      script: rm -f ~/.octo-ckc/settings.json ~/.octo-bpm/settings.json
