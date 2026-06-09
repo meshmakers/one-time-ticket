@@ -1,0 +1,38 @@
+# Installs octo-ckc + octo-bpm from the private NuGet feed and writes a
+# job-scoped catalog config. Both tools read appsettings.json from their
+# working directory (sections: PublicOctoGitHub / PrivateOctoGitHub /
+# LocalFileSystemCatalog); GitHub repo/owner/Pages defaults are built in,
+# only the write token must be supplied.
+steps:
+  - task: Bash@3
+    displayName: Install octo-ckc and octo-bpm from private feed
+    inputs:
+      targetType: inline
+      script: |
+        set -e
+        TOOLDIR="$(Agent.TempDirectory)/octo-tools"
+        rm -rf "$TOOLDIR"
+        dotnet tool install Meshmakers.Octo.ConstructionKit.Compiler --tool-path "$TOOLDIR" --add-source "$(NugetPrivateServer)" --prerelease
+        dotnet tool install Meshmakers.Octo.BlueprintManager --tool-path "$TOOLDIR" --add-source "$(NugetPrivateServer)" --prerelease
+        echo "##vso[task.prependpath]$TOOLDIR"
+
+  - task: Bash@3
+    displayName: Write catalog config (job-scoped, not persisted on agent)
+    env:
+      GITHUB_PAT: $(GitHubPAT) # secret -> env; deliberately NOT "octo-ckc -c Config", which would persist the PAT in the agent user profile
+    inputs:
+      targetType: inline
+      script: |
+        set -e
+        CFGDIR="$(Agent.TempDirectory)/octo-config"
+        mkdir -p "$CFGDIR"
+        cat > "$CFGDIR/appsettings.json" <<EOF
+        {
+          "PublicOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" },
+          "PrivateOctoGitHub": { "GitHubApiToken": "$GITHUB_PAT" },
+          "LocalFileSystemCatalog": { "IsEnabled": false }
+        }
+        EOF
+        echo "##vso[task.setvariable variable=OctoToolsCwd]$CFGDIR"
+        # Catalog caches never self-refresh once present - always start clean
+        rm -rf ~/.octo/ck-catalog/cache ~/.octo/blueprint-catalog/cache

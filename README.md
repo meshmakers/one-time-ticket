@@ -136,6 +136,41 @@ then re-run the 3 install commands. (Rehearse before the demo — uninstall also
 removes the seeded Application entity; undeploy the workload first:
 `octo-cli -c UndeployWorkload -id 077100000000000000000005 -y`.)
 
+## CI / installing on test-2
+
+`devops-build/azure-pipelines.yml` (Azure DevOps, pool `meshmakers-ci-agents`,
+modeled on the energy-community demo pipeline) publishes everything the shared
+**test-2** cluster needs:
+
+| Branch | What happens |
+|---|---|
+| any push | compile CK model (`octo-ckc`), validate blueprint (`octo-bpm`), docker build |
+| `test/*` | + push image `docker.mm.cloud/meshmakers/one-time-ticket-app:<buildnumber>` |
+| `main` | + push image (`<buildnumber>` **and** the blueprint-pinned `0.1.0`), publish `Demo.Tickets` to `PrivateGitHubCatalog` and `OneTimeTicket-1.0.0` to `PrivateGitHubBlueprintCatalog` |
+
+Only `main` writes to the shared GitHub catalogs and the pinned image tag —
+dev/test branches can never change what `InstallBlueprint` resolves on test-2.
+A guard step fails the build if `AppImageVersion` (pipeline) and the image tag
+in `seed-data/entities.yaml` drift apart.
+
+One-time setup after pushing the repo to GitHub (`meshmakers` org):
+1. Azure DevOps → New pipeline → GitHub → this repo → existing YAML
+   `devops-build/azure-pipelines.yml`.
+2. Authorize it for variable groups `ApiKeys-mm-cloud` + `OctoDefault` and the
+   docker registry service connection. (`GitHubPAT` needs contents-write on
+   `construction-kit-libraries-build` and `blueprint-libraries-build`.)
+3. Run once from a `dev/*` branch to verify the no-publish gating, then merge
+   to `main`.
+
+Install on test-2 (per tenant, communication must be enabled first):
+
+```powershell
+# against the test-2 environment (connect.test-2.mm.cloud)
+octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.0      # resolves blueprint + CK model from the GitHub catalogs
+octo-cli -c DeployDataFlow --identifier 077100000000000000000001
+octo-cli -c DeployWorkload -id 077100000000000000000005   # pulls docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0
+```
+
 ## Known limitations (by design — it's a demo)
 
 - **No auth on the endpoints.** Anyone with the URL can create/list/redeem.

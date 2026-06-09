@@ -1,0 +1,28 @@
+# Simplified from energy-community/devops-build/handle-artifacts.yml:
+# this repo produces no nupkgs or API docs - only the compiled CK model
+# and the blueprint are worth keeping per build.
+steps:
+  - task: CopyFiles@2
+    displayName: 'Copy compiled CK model to $(build.artifactstagingdirectory)'
+    inputs:
+      SourceFolder: $(Build.SourcesDirectory)/ck/out
+      Contents: '*.yaml'
+      TargetFolder: $(build.artifactstagingdirectory)/ck-libraries
+      flattenFolders: true
+  - task: CopyFiles@2
+    displayName: 'Copy blueprint to $(build.artifactstagingdirectory)'
+    inputs:
+      SourceFolder: $(Build.SourcesDirectory)/blueprint
+      Contents: '**/*'
+      TargetFolder: $(build.artifactstagingdirectory)/blueprint
+  - task: PowerShell@2
+    displayName: 'Create version info file'
+    inputs:
+      targetType: 'inline'
+      script: |
+        New-Item $(build.artifactstagingdirectory)/versioninfo.txt
+        Set-Content $(build.artifactstagingdirectory)/versioninfo.txt $(Build.BuildNumber)
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: local'
+    inputs:
+      ArtifactName: local

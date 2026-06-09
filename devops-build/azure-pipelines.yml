@@ -1,0 +1,70 @@
+name: $(MajorVersion).$(MinorVersion).$(date:yyMM).$(DayOfMonth)$(rev:rrr)-$(Build.SourceBranchName)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - dev/*
+      - test/*
+      - main
+
+variables:
+  - group: ApiKeys-mm-cloud
+  - group: OctoDefault
+  - name: isRelease
+    value: false # no public release channel for this demo
+  - name: OctoReleaseVersion
+    value: '3.3.*' # referenced by update-build-number.yml (release tags only - unused here)
+  - name: isMain
+    value: ${{ eq(variables['Build.SourceBranch'], 'refs/heads/main') }}
+  - name: isTest
+    value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/heads/test') }}
+  # Must match the image tag pinned in blueprint/OneTimeTicket/1.0.0/seed-data/entities.yaml
+  # (guarded by the "Verify seed-data" step below).
+  - name: AppImageVersion
+    value: '0.1.0'
+  # Shared-catalog write gate: only main may publish to the shared GitHub
+  # catalogs. dev/* and test/* compile + validate but never write (same rule
+  # as octo-bot-services, incident-driven).
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+    - name: publishToCatalogs
+      value: 'true'
+  - ${{ else }}:
+    - name: publishToCatalogs
+      value: 'false'
+
+stages:
+  - stage: Build
+    jobs:
+      - job: linux
+        displayName: Build and publish CK model, blueprint and app image
+        pool:
+          name: meshmakers-ci-agents
+        steps:
+          - template: update-build-number.yml
+          - checkout: self
+            clean: true
+
+          - task: Bash@3
+            displayName: Verify seed-data pins app image $(AppImageVersion)
+            inputs:
+              targetType: inline
+              script: |
+                grep -q 'tag: "$(AppImageVersion)"' "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/1.0.0/seed-data/entities.yaml" || {
+                  echo "##[error]seed-data/entities.yaml does not pin image tag \"$(AppImageVersion)\" - keep AppImageVersion and the blueprint in sync"
+                  exit 1
+                }
+
+          - template: install-octo-tools.yml
+          - template: publish-ck-and-blueprint.yml
+
+          - template: build-and-push-docker-image.yml
+            parameters:
+              PublicRegistryServiceConnection: $(DockerRegistryPublicConnection)
+              PrivateRegistryName: $(DockerRegistryPrivateUri)
+              Repository: meshmakers/one-time-ticket-app
+              Dockerfile: app/Dockerfile
+              BuildContext: $(Build.SourcesDirectory)/app
+              ExtraTag: $(AppImageVersion)
+
+          - template: handle-artifacts.yml

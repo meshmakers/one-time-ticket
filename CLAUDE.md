@@ -39,6 +39,12 @@ script and the platform gotchas. This file only adds the non-obvious bits.
 - The app fulfils the **property-walker chart contract** (env `PORT`,
   `UPSTREAM_URL`; `GET /` must return 200 for the probes; container port 5055).
   Don't break that contract without also changing the chart reference.
+- CI: `devops-build/azure-pipelines.yml` (see README "CI / installing on
+  test-2"). **Only `main` publishes** to the shared GitHub catalogs and pushes
+  the pinned `0.1.0` image tag; the `AppImageVersion` pipeline variable must
+  match the tag in `seed-data/entities.yaml` (guard step enforces it).
+  `octo-ckc`/`octo-bpm` syntax is `-c <Command>` style — catalog arg is
+  `--catalog` (long form; `-c` is the command selector).
 
 ## Platform pitfalls (cost real time — don't rediscover)
 

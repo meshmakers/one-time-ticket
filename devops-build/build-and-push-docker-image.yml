@@ -1,0 +1,71 @@
+# Adapted from energy-community/devops-build/build-and-push-docker-image.yml:
+# +ExtraTag (the blueprint-pinned tag, pushed on main only), +BuildContext,
+# -unused OCTO_*/NPM/TELERIK build args (plain Node Dockerfile takes none).
+parameters:
+  - name: PublicRegistryServiceConnection
+    type: string
+  - name: Repository
+    type: string
+  - name: Dockerfile
+    type: string
+  - name: BuildContext
+    type: string
+    default: $(System.DefaultWorkingDirectory)
+  # Tag the blueprint seed-data pins (e.g. 0.1.0). Pushed on main only, so a
+  # dev/test branch can never overwrite what InstallBlueprint deploys on test-2.
+  - name: ExtraTag
+    type: string
+  - name: Architecture
+    type: string
+    default: linux/amd64
+  - name: PrivateRegistryName
+    type: string
+
+steps:
+  - task: Docker@2
+    displayName: Login to ${{ parameters.PublicRegistryServiceConnection }}
+    inputs:
+      command: login
+      containerRegistry: ${{ parameters.PublicRegistryServiceConnection }}
+
+  - task: CmdLine@2
+    condition: and(eq(variables.isMain, true), eq(variables.isRelease, false))
+    displayName: Build/Push to private ${{ parameters.Repository }}:$(Build.BuildNumber) + :${{ parameters.ExtraTag }}
+    inputs:
+      script: |
+        docker buildx rm mybuilder 2>/dev/null || true
+        docker buildx create --use --name mybuilder --bootstrap --config ~/buildkitd.default.toml &&
+        docker buildx build --platform ${{ parameters.Architecture }} \
+          -f ${{ parameters.Dockerfile }} \
+          -t ${{ parameters.PrivateRegistryName }}/${{ parameters.Repository }}:$(Build.BuildNumber) \
+          -t ${{ parameters.PrivateRegistryName }}/${{ parameters.Repository }}:${{ parameters.ExtraTag }} \
+          --push \
+          ${{ parameters.BuildContext }} &&
+        docker buildx rm mybuilder
+
+  - task: CmdLine@2
+    condition: eq(variables.isTest, true)
+    displayName: Build/Push to private ${{ parameters.Repository }}:$(Build.BuildNumber)
+    inputs:
+      script: |
+        docker buildx rm mybuilder 2>/dev/null || true
+        docker buildx create --use --name mybuilder --bootstrap --config ~/buildkitd.default.toml &&
+        docker buildx build --platform ${{ parameters.Architecture }} \
+          -f ${{ parameters.Dockerfile }} \
+          -t ${{ parameters.PrivateRegistryName }}/${{ parameters.Repository }}:$(Build.BuildNumber) \
+          --push \
+          ${{ parameters.BuildContext }} &&
+        docker buildx rm mybuilder
+
+  - task: CmdLine@2
+    condition: and(ne(variables.isMain, true), ne(variables.isTest, true))
+    displayName: Build ONLY for non-main/test branch ${{ parameters.Repository }}:$(Build.BuildNumber)
+    inputs:
+      script: |
+        docker buildx rm mybuilder 2>/dev/null || true
+        docker buildx create --use --name mybuilder --bootstrap --config ~/buildkitd.default.toml &&
+        docker buildx build --platform ${{ parameters.Architecture }} \
+          -f ${{ parameters.Dockerfile }} \
+          -t ${{ parameters.PrivateRegistryName }}/${{ parameters.Repository }}:$(Build.BuildNumber) \
+          ${{ parameters.BuildContext }} &&
+        docker buildx rm mybuilder
