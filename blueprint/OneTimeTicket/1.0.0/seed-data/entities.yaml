@@ -323,11 +323,12 @@ entities:
       - id: System.Communication/ReceivesClusterSecrets-1
         value: false
       # Ingress: hostname template resolved at deploy time against the
-      # controller's default domain (127.0.0.1.nip.io on kind).
+      # controller's default domain (127.0.0.1.nip.io on kind,
+      # test-2.mm.cloud on test-2 -> e.g. https://tickets.test-2.mm.cloud).
       - id: System.Communication/IngressEnabled-1
         value: true
       - id: System.Communication/Hostname-1
-        value: 'one-time-ticket-${octo.tenantId}.{{domain.default}}'
+        value: '${octo.tenantId}.{{domain.default}}'
       # upstreamUrl: the Mesh Adapter's in-cluster HTTP service, tenant-scoped.
       # image: the one-time-ticket app image (loaded into the cluster, or pushed
       # to the registry the operator injects via image.privateRegistry).
