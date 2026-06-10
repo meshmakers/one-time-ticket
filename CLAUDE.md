@@ -17,9 +17,19 @@ script and the platform gotchas. This file only adds the non-obvious bits.
 | Pipelines create / list / redeem | `0771…02` / `0771…03` / `0771…04` |
 | Application "One-Time Ticket App" | `077100000000000000000005` |
 | Mesh Adapter (System.Communication seed) | `670000000000000000000002` |
-| App URL (kind ingress) | `https://one-time-ticket-test.127.0.0.1.nip.io` |
+| App URL (kind ingress) | `https://one-time-ticket-test.127.0.0.1.nip.io` (pre-hostname-change install; a reinstall yields `test.127.0.0.1.nip.io`) |
 | App pod | ns `octo`, deploy `test-0771…05-property-walker` |
 | CK model in local catalog | `Demo.Tickets-1.0.0` (`~/.octo/local-catalog/ck-models/v2/d/…`) |
+
+## Live state (tenant `tickets`, test-2 cluster, as of 2026-06-10)
+
+Same seed ids as above (blueprint-pinned). Installed from the shared GitHub
+catalogs (published by CI run 33932), app live at
+**`https://tickets.test-2.mm.cloud`** (hostname template
+`${octo.tenantId}.{{domain.default}}`). Pool/adapter were brought up with the
+pool-FIRST sequence — see the octo-deploy skill in `../octo-claude-skills/`
+for the order, the pool-deploy REST call, and the blueprint-catalog-cache
+restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
 
 ## Editing rules
 
