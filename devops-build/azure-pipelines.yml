@@ -19,7 +19,7 @@ variables:
     value: ${{ eq(variables['Build.SourceBranch'], 'refs/heads/main') }}
   - name: isTest
     value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/heads/test') }}
-  # Must match the image tag pinned in blueprint/OneTimeTicket/1.0.0/seed-data/entities.yaml
+  # Must match the image tag pinned in blueprint/OneTimeTicket/seed-data/entities.yaml
   # (guarded by the "Verify seed-data" step below).
   - name: AppImageVersion
     value: '0.1.0'
@@ -50,7 +50,7 @@ stages:
             inputs:
               targetType: inline
               script: |
-                grep -q 'tag: "$(AppImageVersion)"' "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/1.0.0/seed-data/entities.yaml" || {
+                grep -q 'tag: "$(AppImageVersion)"' "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/seed-data/entities.yaml" || {
                   echo "##[error]seed-data/entities.yaml does not pin image tag \"$(AppImageVersion)\" - keep AppImageVersion and the blueprint in sync"
                   exit 1
                 }

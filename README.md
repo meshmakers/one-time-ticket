@@ -34,7 +34,7 @@ browser ── https://one-time-ticket-test.127.0.0.1.nip.io   (ingress, kind)
 |---|---|
 | `ck/ConstructionKit/` | `Demo.Tickets` CK model source (compile with `octo-ckc`) |
 | `ck/out/` | Compiled model (generated) |
-| `blueprint/OneTimeTicket/1.0.0/` | The blueprint: manifest + seed data (DataFlow, 3 pipelines, Application). **Single source of truth** for everything installed into a tenant |
+| `blueprint/OneTimeTicket/` | The blueprint: manifest + seed data (DataFlow, 3 pipelines, Application). Name-only folder; version lives in `blueprint.yaml`'s `blueprintId`. **Single source of truth** for everything installed into a tenant |
 | `app/` | The web app: zero-dependency Node proxy (`server/server.js`), single-file SPA (`client/index.html`), `Dockerfile` |
 | `test/dataflow-test.yaml` | Scratch dataflow used for pipeline iteration (temp rtIds/paths) — not part of the install |
 
@@ -47,7 +47,7 @@ Helm repo `…003`).
 ```powershell
 # 1. Install the blueprint — imports the Demo.Tickets CK model from the
 #    catalog and seeds DataFlow + pipelines + Application into the tenant
-octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.0
+octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1
 
 # 2. Deploy the pipelines to the Mesh Adapter
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
@@ -120,7 +120,7 @@ To iterate on the **app** only: rebuild + `kind load` + restart the pod
 (`kubectl rollout restart deploy/test-077100000000000000000005-property-walker -n octo`).
 
 To iterate on **pipelines**: edit the seed, bump nothing, re-apply with
-`octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.0 -f`, then `DeployDataFlow`.
+`octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1 -f`, then `DeployDataFlow`.
 
 ### Resetting the demo
 
@@ -146,7 +146,7 @@ modeled on the energy-community demo pipeline) publishes everything the shared
 |---|---|
 | any push | compile CK model (`octo-ckc`), validate blueprint (`octo-bpm`), docker build |
 | `test/*` | + push image `docker.mm.cloud/meshmakers/one-time-ticket-app:<buildnumber>` |
-| `main` | + push image (`<buildnumber>` **and** the blueprint-pinned `0.1.0`), publish `Demo.Tickets` to `PrivateGitHubCatalog` and `OneTimeTicket-1.0.0` to `PrivateGitHubBlueprintCatalog` |
+| `main` | + push image (`<buildnumber>` **and** the blueprint-pinned `0.1.0`), publish `Demo.Tickets` to `PrivateGitHubCatalog` and `OneTimeTicket-1.0.1` to `PrivateGitHubBlueprintCatalog` |
 
 Only `main` writes to the shared GitHub catalogs and the pinned image tag —
 dev/test branches can never change what `InstallBlueprint` resolves on test-2.
@@ -166,7 +166,7 @@ Install on test-2 (per tenant, communication must be enabled first):
 
 ```powershell
 # against the test-2 environment (connect.test-2.mm.cloud)
-octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.0      # resolves blueprint + CK model from the GitHub catalogs
+octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1      # resolves blueprint + CK model from the GitHub catalogs
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
 octo-cli -c DeployWorkload -id 077100000000000000000005   # pulls docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0
 ```

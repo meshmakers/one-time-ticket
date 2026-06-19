@@ -33,14 +33,20 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
 
 ## Editing rules
 
-- `blueprint/OneTimeTicket/1.0.0/seed-data/entities.yaml` is the **single
+- The blueprint folder is **name-only** (`blueprint/OneTimeTicket/`, no version
+  subfolder — house convention, see octo-communication-controller-services
+  commit c5b1b0c). The version lives solely in `blueprint.yaml`'s `blueprintId`;
+  bump it there in place, never rename the folder. Old versions live in git history.
+- `blueprint/OneTimeTicket/seed-data/entities.yaml` is the **single
   source of truth** for the dataflow + pipelines + Application. `test/dataflow-test.yaml`
   is a scratch copy for iteration only — keep them in sync manually if used.
 - After changing the blueprint: copy to
-  `~/.octo/local-blueprint-catalog/blueprints/v1/OneTimeTicket/1.0.0/`, **delete
+  `~/.octo/local-blueprint-catalog/blueprints/v1/OneTimeTicket/<version>/` (the
+  catalog storage layout *is* version-foldered — use the `blueprintId` version,
+  currently `1.0.1`), **delete
   `~/.octo/blueprint-catalog/cache/local-blueprint-catalog-cache.json`**
   (the cache never refreshes while the file exists), then
-  `InstallBlueprint -b OneTimeTicket-1.0.0 -f` + `DeployDataFlow`.
+  `InstallBlueprint -b OneTimeTicket-1.0.1 -f` + `DeployDataFlow`.
 - After changing the app: `docker build` + tag **both**
   `meshmakers/one-time-ticket-app:0.1.0` and
   `docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0` + `kind load` both +

@@ -15,12 +15,12 @@ steps:
         octo-ckc -c Compile -p "$(Build.SourcesDirectory)/ck/ConstructionKit" -o "$(Build.SourcesDirectory)/ck/out"
 
   - task: Bash@3
-    displayName: Validate blueprint OneTimeTicket-1.0.0
+    displayName: Validate blueprint OneTimeTicket
     inputs:
       targetType: inline
       script: |
         set -e
-        octo-bpm -c validate -p "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/1.0.0"
+        octo-bpm -c validate -p "$(Build.SourcesDirectory)/blueprint/OneTimeTicket"
 
   # CK model first - the blueprint's ckModelDependencies must resolve at install time
   - task: Bash@3
@@ -34,7 +34,7 @@ steps:
         octo-ckc -c Publish -f "$(Build.SourcesDirectory)/ck/out/ck-demo.tickets.yaml" --catalog PrivateGitHubCatalog -r
 
   - task: Bash@3
-    displayName: Publish OneTimeTicket-1.0.0 to PrivateGitHubBlueprintCatalog
+    displayName: Publish OneTimeTicket to PrivateGitHubBlueprintCatalog
     condition: and(succeeded(), eq(variables.publishToCatalogs, 'true'))
     inputs:
       targetType: inline
@@ -42,5 +42,5 @@ steps:
         set -eo pipefail
         # octo-bpm logs publish failures but can still exit 0 - require the
         # success message in the output
-        octo-bpm -c publish -p "$(Build.SourcesDirectory)/blueprint/OneTimeTicket/1.0.0" --catalog PrivateGitHubBlueprintCatalog -f | tee bpm-publish.log
+        octo-bpm -c publish -p "$(Build.SourcesDirectory)/blueprint/OneTimeTicket" --catalog PrivateGitHubBlueprintCatalog -f | tee bpm-publish.log
         grep -q "published successfully to catalog" bpm-publish.log

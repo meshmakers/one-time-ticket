@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: OneTimeTicket-1.0.0
+blueprintId: OneTimeTicket-1.0.1
 description: |
   One-Time Ticket — a complete OctoMesh demo app in a single installable bundle.
 
@@ -29,9 +29,12 @@ ckModelDependencies:
 
 seedDataPath: seed-data/entities.yaml
 
-# Same gate as the other dev/test-channel app blueprints: the operator-driven
-# DeployWorkload rollout exists on kind (dev) and test-2 (test) only.
+# The Communication Operator now runs on every environment, so this single
+# blueprint is allowed everywhere. Values must match each cluster's
+# OCTO_BLUEPRINTS__ENVIRONMENT (dev / test / staging / production).
 requires:
   octo.environment:
     - dev
     - test
+    - staging
+    - production
