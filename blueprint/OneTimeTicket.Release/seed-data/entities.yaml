@@ -291,7 +291,7 @@ entities:
 
   # ========================================================================
   # Web app — Application workload, rolled out by the Communication Operator
-  # as a Helm release (same pattern as the property-walker app).
+  # as a Helm release from the one-time-ticket-app chart (src/charts).
   # ========================================================================
   - rtId: '077100000000000000000005'
     ckTypeId: System.Communication/Application-1
@@ -300,21 +300,22 @@ entities:
       - roleId: System.Communication/Manages-1
         targetRtId: '670000000000000000000001'
         targetCkTypeId: System.Communication/Pool-1
-      # Chart source: the meshmakers-dev Helm repo seeded by System.Communication.
+      # Chart source: meshmakers-apps (release apps channel, 005) — pre-seeded by
+      # System.Communication.Release. The MainLatest variant points at the dev
+      # channel (003) instead.
       - roleId: System.Communication/HelmRepository-1
-        targetRtId: '670000000000000000000003'
+        targetRtId: '670000000000000000000005'
         targetCkTypeId: System.Communication/HelmRepositoryConfiguration-1
     attributes:
       - id: System/Name-1
         value: One-Time Ticket App
       - id: System/Description-1
         value: 'One-Time Ticket web UI (Node proxy + static client). Proxies the tenant-scoped ticket HTTP API hosted by the Mesh Adapter.'
-      # The app fulfils the property-walker chart contract (PORT/UPSTREAM_URL,
-      # probe on GET /), so it reuses that chart with the image overridden in
-      # ValuesYaml below. Publish a dedicated one-time-ticket-app chart via CI
-      # to make this self-named.
+      # Own chart (src/charts/one-time-ticket-app), published to the apps release
+      # channel on r* release tags. Empty ChartVersion = track the channel's
+      # newest released chart; the image tag follows the chart's appVersion.
       - id: System.Communication/ChartName-1
-        value: property-walker
+        value: one-time-ticket-app
       - id: System.Communication/ChartVersion-1
         value: ""
       - id: System.Communication/DeploymentState-1
@@ -329,12 +330,11 @@ entities:
         value: true
       - id: System.Communication/Hostname-1
         value: '${octo.tenantId}.{{domain.default}}'
-      # upstreamUrl: the Mesh Adapter's in-cluster HTTP service, tenant-scoped.
-      # image: the one-time-ticket app image (loaded into the cluster, or pushed
-      # to the registry the operator injects via image.privateRegistry).
+      # Only the tenant-scoped upstream needs overriding. The chart defaults
+      # image.repository to meshmakers/one-time-ticket-app, the operator injects
+      # image.privateRegistry, and image.tag defaults to the chart appVersion
+      # (set by CI to the same build number as the pushed image) — so the
+      # workload never pins a tag here.
       - id: System.Communication/ValuesYaml-1
         value: |
           upstreamUrl: http://${octo.tenantId}-670000000000000000000002.octo.svc.cluster.local:80/${octo.tenantId}
-          image:
-            repository: meshmakers/one-time-ticket-app
-            tag: "0.1.0"

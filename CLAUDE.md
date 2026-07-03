@@ -31,36 +31,46 @@ pool-FIRST sequence — see the octo-deploy skill in `../octo-claude-skills/`
 for the order, the pool-deploy REST call, and the blueprint-catalog-cache
 restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
 
-## Editing rules
+## Repo shape (production-ready, mirrors the platform repos)
 
-- The blueprint folder is **name-only** (`blueprint/OneTimeTicket/`, no version
-  subfolder — house convention, see octo-communication-controller-services
-  commit c5b1b0c). The version lives solely in `blueprint.yaml`'s `blueprintId`;
-  bump it there in place, never rename the folder. Old versions live in git history.
-- `blueprint/OneTimeTicket/seed-data/entities.yaml` is the **single
-  source of truth** for the dataflow + pipelines + Application. `test/dataflow-test.yaml`
-  is a scratch copy for iteration only — keep them in sync manually if used.
-- After changing the blueprint: copy to
-  `~/.octo/local-blueprint-catalog/blueprints/v1/OneTimeTicket/<version>/` (the
-  catalog storage layout *is* version-foldered — use the `blueprintId` version,
-  currently `1.0.1`), **delete
-  `~/.octo/blueprint-catalog/cache/local-blueprint-catalog-cache.json`**
-  (the cache never refreshes while the file exists), then
-  `InstallBlueprint -b OneTimeTicket-1.0.1 -f` + `DeployDataFlow`.
-- After changing the app: `docker build` + tag **both**
-  `meshmakers/one-time-ticket-app:0.1.0` and
-  `docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0` + `kind load` both +
-  `kubectl rollout restart` the deploy. The operator injects
-  `image.privateRegistry=docker.mm.cloud`, hence the double tag.
-- The app fulfils the **property-walker chart contract** (env `PORT`,
-  `UPSTREAM_URL`; `GET /` must return 200 for the probes; container port 5055).
-  Don't break that contract without also changing the chart reference.
-- CI: `devops-build/azure-pipelines.yml` (see README "CI / installing on
-  test-2"). **Only `main` publishes** to the shared GitHub catalogs and pushes
-  the pinned `0.1.0` image tag; the `AppImageVersion` pipeline variable must
-  match the tag in `seed-data/entities.yaml` (guard step enforces it).
-  `octo-ckc`/`octo-bpm` syntax is `-c <Command>` style — catalog arg is
-  `--catalog` (long form; `-c` is the command selector).
+- **CK model** (`ck/`): `ck/ConstructionKit/` YAML wrapped by `ck/DemoTickets.csproj`
+  (+ root `Directory.Build.props`, `OneTimeTicket.sln`) — the
+  `octo-construction-kit` pattern. `dotnet build OneTimeTicket.sln -c DebugL`
+  compiles **and** publishes `Demo.Tickets` to the local catalog (no manual
+  `octo-ckc`). CI publishes to `$(effectivePublishCatalog)` (local on dev/*,
+  PrivateGitHubCatalog on main/test, PublicGitHubCatalog on r*).
+- **Chart** (`src/charts/one-time-ticket-app/`): the app's own Helm chart, based
+  on `octo-helm-core/src/octo-mesh-demo-app`, shipped in-repo like
+  `octo-mesh-adapter`. Replaces the borrowed `property-walker` chart. Contract:
+  container port **5055**, env `PORT` + `UPSTREAM_URL`, `GET /` → 200 for the
+  probes, operator-injected `image.{repository,tag,privateRegistry}`. `image.tag`
+  defaults to the chart `appVersion` (CI sets it to the image's build number), so
+  never pin a tag in the blueprint.
+- **Blueprint** — TWO variants (mirrors `System.Communication.{MainLatest,Release}`),
+  because the helm repos are seeded per channel:
+  - `blueprint/OneTimeTicket.MainLatest/` — requires `[dev, test]`, Application →
+    HelmRepository `670…003` (meshmakers-dev).
+  - `blueprint/OneTimeTicket.Release/` — requires `[staging, production]`,
+    Application → HelmRepository `670…005` (meshmakers-apps).
+  Both point at repos **pre-seeded by System.Communication** (don't seed your
+  own). Folders are name-only; the version lives in `blueprintId`. The two
+  `seed-data/entities.yaml` differ only in that one HelmRepository target — keep
+  them in sync. `ChartVersion` is empty (track the channel's newest chart).
+- **CI** (`azure-pipelines.yml`, root): shared `octo-pipeline-templates@tpl-v0.4.6`
+  + `helm-chart-build` templates. Triggers on `dev/* , test/* , main`, and `r*`
+  tags. `r*` is the production release: publishes CK → public catalog, blueprint →
+  public blueprint catalog, chart → `meshmakers.github.io/apps`, image tagged with
+  the build number. There is no `AppImageVersion` guard — the chart `appVersion`
+  drives the image tag.
+
+  > Cutover: this root pipeline replaces the deleted `devops-build/`. The ADO
+  > pipeline definition's `yamlFilename` must be flipped to `azure-pipelines.yml`.
+  > Push the `dev/*` branch first to validate the pipeline with all publishing
+  > gated off, before merging to `main`.
+
+- `blueprint/*/seed-data/entities.yaml` is the source of truth for the dataflow +
+  pipelines + Application. `test/dataflow-test.yaml` is a scratch copy — keep in
+  sync manually if used.
 
 ## Platform pitfalls (cost real time — don't rediscover)
 
@@ -75,14 +85,21 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
    raw context contains `$.body.secret` and lookup results!).
 4. Pipeline JSON shapes are PascalCase; `attributeName` = CK attribute name as
    declared in the type (here PascalCase: `Name`, `Secret`, `Redeemed`, `RedeemedAt`).
-5. `octo-ckc` lives at
-   `C:\dev\meshmakers\octo-construction-kit-engine\bin\DebugL\net10.0\octo-ckc.exe`
-   (not on PATH).
+5. The CK model now compiles via `dotnet build` — don't reach for `octo-ckc`
+   directly. The only standalone tool the CI still invokes is `octo-bpm`
+   (blueprint validate/publish), installed from the private NuGet feed.
 
-## Reference material
+## Reference material (canonical platform repos — NOT hand-crafted demos)
 
-- `zenon-dynprop-api/` repo + the `ZenonDynprop.MainLatest-1.0.0` blueprint
-  (meshmakers/blueprint-libraries-build → `blueprints/v1/z/…`) — the template
-  this demo was modeled on (downloaded copy: `.research/zenon-blueprint/`).
-- `.research/pipeline-schema.json` — full node-config JSON schema of the live
-  mesh adapter (GetPipelineSchema output).
+- CK-model `.csproj` + MSBuild publish: `octo-construction-kit`
+  (`Directory.Build.props`, `src/ConstructionKits/*`).
+- In-repo chart + shared-template CI: `octo-mesh-adapter`
+  (`src/charts/*`, root `azure-pipelines.yml`). Clean app-chart template:
+  `octo-helm-core/src/octo-mesh-demo-app`.
+- Two-variant blueprint + helm-repo seeds: `octo-communication-controller-services`
+  → `System.Communication.{MainLatest,Release}`.
+- Shared CI steps + `effectivePublishCatalog`: `octo-pipeline-templates`.
+- `.research/pipeline-schema.json` — node-config JSON schema of the live mesh
+  adapter (GetPipelineSchema output).
+- Do NOT model this repo on `zenon-dynprop-api` — it is itself hand-crafted and
+  was the original (divergent) template for this demo.

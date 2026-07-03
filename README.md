@@ -32,10 +32,13 @@ browser ── https://one-time-ticket-test.127.0.0.1.nip.io   (ingress, kind)
 
 | Path | Purpose |
 |---|---|
-| `ck/ConstructionKit/` | `Demo.Tickets` CK model source (compile with `octo-ckc`) |
-| `ck/out/` | Compiled model (generated) |
-| `blueprint/OneTimeTicket/` | The blueprint: manifest + seed data (DataFlow, 3 pipelines, Application). Name-only folder; version lives in `blueprint.yaml`'s `blueprintId`. **Single source of truth** for everything installed into a tenant |
+| `ck/ConstructionKit/` | `Demo.Tickets` CK model source (YAML) |
+| `ck/DemoTickets.csproj` | Wraps the model so `dotnet build` compiles + publishes it (octo-construction-kit pattern). Built via `OneTimeTicket.sln` |
+| `blueprint/OneTimeTicket.MainLatest/` | Blueprint variant for **dev/test** (Application → meshmakers-dev Helm repo `…003`). Manifest + seed data (DataFlow, 3 pipelines, Application) |
+| `blueprint/OneTimeTicket.Release/` | Blueprint variant for **staging/production** (Application → meshmakers-apps release Helm repo `…005`). Seed differs from MainLatest only in that one association |
+| `src/charts/one-time-ticket-app/` | The app's own Helm chart (based on octo-mesh-demo-app), published to the dev + apps channels by CI |
 | `app/` | The web app: zero-dependency Node proxy (`server/server.js`), single-file SPA (`client/index.html`), `Dockerfile` |
+| `azure-pipelines.yml` | CI using the shared `octo-pipeline-templates` + `helm-chart-build` templates |
 | `test/dataflow-test.yaml` | Scratch dataflow used for pipeline iteration (temp rtIds/paths) — not part of the install |
 
 ## The install story (what the customer sees)
@@ -46,8 +49,11 @@ Helm repo `…003`).
 
 ```powershell
 # 1. Install the blueprint — imports the Demo.Tickets CK model from the
-#    catalog and seeds DataFlow + pipelines + Application into the tenant
-octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1
+#    catalog and seeds DataFlow + pipelines + Application into the tenant.
+#    Pick the variant for the target environment:
+#      dev/test          -> OneTimeTicket.MainLatest
+#      staging/production -> OneTimeTicket.Release
+octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-1.0.0
 
 # 2. Deploy the pipelines to the Mesh Adapter
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
@@ -93,34 +99,33 @@ the communication controller at deploy time, `127.0.0.1.nip.io` on kind).
 ## Developer workflow (how this was built)
 
 ```powershell
-$ckc = "C:\dev\meshmakers\octo-construction-kit-engine\bin\DebugL\net10.0\octo-ckc.exe"
+# 1. CK model: dotnet build compiles AND publishes Demo.Tickets into the local
+#    CK catalog (no manual octo-ckc).
+dotnet build OneTimeTicket.sln -c DebugL
 
-# 1. CK model: author YAML → compile → publish into the local CK catalog
-& $ckc -c Compile -p .\ck\ConstructionKit -o .\ck\out
-& $ckc -c Publish -f .\ck\out\ck-demo.tickets.yaml -r       # → ~/.octo/local-catalog
-
-# 2. Blueprint: copy into the local blueprint catalog
-$dst = "$HOME\.octo\local-blueprint-catalog\blueprints\v1\OneTimeTicket\1.0.0"
+# 2. Blueprint: copy a variant into the local blueprint catalog (pick MainLatest
+#    for a dev/test tenant). The catalog layout is version-foldered:
+$dst = "$HOME\.octo\local-blueprint-catalog\blueprints\v1\OneTimeTicket.MainLatest\1.0.0"
 New-Item -ItemType Directory -Force "$dst\seed-data" | Out-Null
-Copy-Item .\blueprint\OneTimeTicket\1.0.0\blueprint.yaml $dst -Force
-Copy-Item .\blueprint\OneTimeTicket\1.0.0\seed-data\entities.yaml "$dst\seed-data" -Force
+Copy-Item .\blueprint\OneTimeTicket.MainLatest\blueprint.yaml $dst -Force
+Copy-Item .\blueprint\OneTimeTicket.MainLatest\seed-data\entities.yaml "$dst\seed-data" -Force
 # the catalog cache only refreshes when the cache file is missing:
 Remove-Item "$HOME\.octo\blueprint-catalog\cache\local-blueprint-catalog-cache.json" -Force
 
 # 3. App image: build + load into kind (no registry needed; the operator
 #    injects docker.mm.cloud as registry prefix, so tag both names)
-docker build -t meshmakers/one-time-ticket-app:0.1.0 .\app
-docker tag meshmakers/one-time-ticket-app:0.1.0 docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0
-kind load docker-image meshmakers/one-time-ticket-app:0.1.0 docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0
+docker build -t meshmakers/one-time-ticket-app:dev .\app
+docker tag meshmakers/one-time-ticket-app:dev docker.mm.cloud/meshmakers/one-time-ticket-app:dev
+kind load docker-image meshmakers/one-time-ticket-app:dev docker.mm.cloud/meshmakers/one-time-ticket-app:dev
 
 # 4. Install + deploy (see "install story" above)
 ```
 
 To iterate on the **app** only: rebuild + `kind load` + restart the pod
-(`kubectl rollout restart deploy/test-077100000000000000000005-property-walker -n octo`).
+(`kubectl rollout restart deploy/<tenant>-077100000000000000000005-one-time-ticket-app -n octo`).
 
-To iterate on **pipelines**: edit the seed, bump nothing, re-apply with
-`octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1 -f`, then `DeployDataFlow`.
+To iterate on **pipelines**: edit the seed, re-apply with
+`octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-1.0.0 -f`, then `DeployDataFlow`.
 
 ### Resetting the demo
 
@@ -131,44 +136,49 @@ To iterate on **pipelines**: edit the seed, bump nothing, re-apply with
 Tickets are ordinary `Demo.Tickets/Ticket` entities; delete them via Studio or
 the asset-repo GraphQL `runtime.runtimeEntities.delete` mutation.
 
-For the full wow-effect live install: `UninstallBlueprint -n OneTimeTicket`
-then re-run the 3 install commands. (Rehearse before the demo — uninstall also
+For the full wow-effect live install: `UninstallBlueprint -n OneTimeTicket.MainLatest`
+(or `OneTimeTicket.Release`) then re-run the 3 install commands. (Rehearse before the demo — uninstall also
 removes the seeded Application entity; undeploy the workload first:
 `octo-cli -c UndeployWorkload -id 077100000000000000000005 -y`.)
 
-## CI / installing on test-2
+## CI / releasing
 
-`devops-build/azure-pipelines.yml` (Azure DevOps, pool `meshmakers-ci-agents`,
-modeled on the energy-community demo pipeline) publishes everything the shared
-**test-2** cluster needs:
+`azure-pipelines.yml` (root, pool `meshmakers-ci-agents`) uses the shared
+`octo-pipeline-templates` + `helm-chart-build` templates — the same shape as
+`octo-mesh-adapter` and `octo-construction-kit`. Publishing is gated by branch/tag
+(via the shared `update-build-number` template's `effectivePublishCatalog`):
 
-| Branch | What happens |
-|---|---|
-| any push | compile CK model (`octo-ckc`), validate blueprint (`octo-bpm`), docker build |
-| `test/*` | + push image `docker.mm.cloud/meshmakers/one-time-ticket-app:<buildnumber>` |
-| `main` | + push image (`<buildnumber>` **and** the blueprint-pinned `0.1.0`), publish `Demo.Tickets` to `PrivateGitHubCatalog` and `OneTimeTicket-1.0.1` to `PrivateGitHubBlueprintCatalog` |
+| Trigger | CK model | Blueprint | Chart | Image |
+|---|---|---|---|---|
+| `dev/*` | local catalog | validate only | — | build (no publish) |
+| `main` | `PrivateGitHubCatalog` (build) | `PrivateGitHubBlueprintCatalog` | dev channel | push `<buildnumber>` |
+| `test/<X.Y>-*` | `PrivateGitHubCatalog` | `PrivateGitHubBlueprintCatalog` | — | push `<buildnumber>` |
+| `r<X.Y.Z>` tag | **`PublicGitHubCatalog`** | **`PublicGitHubBlueprintCatalog`** | **apps release channel** (`meshmakers.github.io/apps`) | push `<X.Y.Z>` |
 
-Only `main` writes to the shared GitHub catalogs and the pinned image tag —
-dev/test branches can never change what `InstallBlueprint` resolves on test-2.
-A guard step fails the build if `AppImageVersion` (pipeline) and the image tag
-in `seed-data/entities.yaml` drift apart.
+**Managed environments (staging/prod) read the public CK catalog + the apps
+release Helm channel**, so cutting an `r*` tag is what makes the app installable
+there. The chart `appVersion` is set to the image build number, so the chart's
+`image.tag` default resolves to the matching image — no pinned tag, no guard.
 
-One-time setup after pushing the repo to GitHub (`meshmakers` org):
-1. Azure DevOps → New pipeline → GitHub → this repo → existing YAML
-   `devops-build/azure-pipelines.yml`.
-2. Authorize it for variable groups `ApiKeys-mm-cloud` + `OctoDefault` and the
-   docker registry service connection. (`GitHubPAT` needs contents-write on
-   `construction-kit-libraries-build` and `blueprint-libraries-build`.)
-3. Run once from a `dev/*` branch to verify the no-publish gating, then merge
-   to `main`.
+One-time ADO setup:
+1. Point the pipeline definition's `yamlFilename` at `azure-pipelines.yml`
+   (this replaces the deleted `devops-build/`).
+2. Authorize variable groups `ApiKeys-mm-cloud` + `OctoDefault`, the docker
+   registry service connection, and the `helm-chart-build` GitHub token
+   (`HelmChartBuildGhToken`). `GitHubPAT` needs contents-write on
+   `construction-kit-libraries-build`, `blueprint-libraries-build`,
+   `meshmakers.github.io` and `meshmakers.github.io` (apps).
+3. Push a `dev/*` branch first — it runs build + validate + image build with all
+   publishing gated off — then merge to `main`, then cut `r<X.Y.Z>` to release.
 
-Install on test-2 (per tenant, communication must be enabled first):
+Install on any environment (per tenant, communication enabled first). Pick the
+variant for the environment — `OneTimeTicket.MainLatest` on dev/test,
+`OneTimeTicket.Release` on staging/production:
 
 ```powershell
-# against the test-2 environment (connect.test-2.mm.cloud)
-octo-cli -c InstallBlueprint -b OneTimeTicket-1.0.1      # resolves blueprint + CK model from the GitHub catalogs
+octo-cli -c InstallBlueprint -b OneTimeTicket.Release-1.0.0   # resolves blueprint + CK model from the GitHub catalogs
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
-octo-cli -c DeployWorkload -id 077100000000000000000005   # pulls docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0
+octo-cli -c DeployWorkload -id 077100000000000000000005       # pulls the one-time-ticket-app chart + image
 ```
 
 ## Known limitations (by design — it's a demo)
@@ -179,13 +189,9 @@ octo-cli -c DeployWorkload -id 077100000000000000000005   # pulls docker.mm.clou
   implementation would want a check-and-set primitive in `ApplyChanges`.
 - **Errors return HTTP 200** with `{"error": …}` — the adapter's HTTP trigger
   doesn't expose status-code control.
-- **Chart reuse:** the Application uses the existing `property-walker` Helm
-  chart (the app intentionally fulfils the same contract: `PORT`,
-  `UPSTREAM_URL`, probe on `/`) with the image overridden in `ValuesYaml`.
-  Publishing a dedicated `one-time-ticket-app` chart via the standard CI would
-  make `chartName` self-describing.
-- On clusters other than local kind, the image must be pushed to a registry
-  the cluster can pull from (`docker.mm.cloud/meshmakers/one-time-ticket-app:0.1.0`).
+- On clusters other than local kind, the image must be pushed to a registry the
+  cluster can pull from (`docker.mm.cloud/meshmakers/one-time-ticket-app`); the
+  operator injects `image.privateRegistry=docker.mm.cloud`.
 
 ## Gotchas learned while building (platform notes)
 

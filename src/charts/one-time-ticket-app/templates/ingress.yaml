@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "one-time-ticket-app.fullname" . }}
+  labels:
+    {{- include "one-time-ticket-app.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tlsExtra }}
+  tls:
+    {{- with .Values.ingress.tlsExtra }}
+    {{- toYaml . | nindent 2 }}
+    {{- end }}
+  {{- else }}
+  tls:
+    - hosts:
+        - {{ .Values.publicUri | replace "https://" "" | trimSuffix "/" | quote }}
+      secretName: {{ include "one-time-ticket-app.fullname" . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.publicUri | replace "https://" "" | trimSuffix "/" | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "one-time-ticket-app.fullname" . }}
+                port:
+                  number: {{ $.Values.service.port }}
+{{- end }}

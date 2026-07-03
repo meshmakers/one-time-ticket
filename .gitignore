@@ -3,8 +3,12 @@ node_modules/
 npm-debug.log*
 *.log
 
-# Compiled Construction Kit output (regenerate with octo-ckc compile)
+# Compiled Construction Kit output (legacy manual octo-ckc path; now produced by `dotnet build`)
 ck/out/
+
+# .NET build artifacts (CK model now compiles via `dotnet build`)
+bin/
+obj/
 
 # Secrets / local environment
 .env
