@@ -81,6 +81,19 @@ stages:
           - checkout: self
             clean: true
           - template: templates/steps/set-version.yml@pipelineTemplates
+          # Internal CA so dotnet can trust the private NuGet feed's TLS.
+          - template: templates/steps/download-ca.yml@pipelineTemplates
+
+          # Restore the current platform packages from the PRIVATE feed. Without
+          # /p:OctoNugetPrivateServer the build falls back to public nuget.org and
+          # resolves stale packages (the CK compiler version check then fails).
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: 'OneTimeTicket.sln'
+              restoreArguments: '--force /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
+              noCache: true
 
           # CK model: compile + publish to $(effectivePublishCatalog) via MSBuild
           # (no manual octo-ckc). On dev/* this publishes to the per-run local
@@ -92,6 +105,7 @@ stages:
               projects: 'OneTimeTicket.sln'
               arguments: >-
                 --configuration Release
+                /p:OctoNugetPrivateServer=$(nugetPrivateServer)
                 /p:OctoPublishCkModel=true
                 /p:OctoPublishCatalog="$(effectivePublishCatalog)"
                 /p:OctoPrivateGitHubApiKey=$(GitHubPAT)
