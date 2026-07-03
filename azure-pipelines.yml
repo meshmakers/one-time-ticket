@@ -55,12 +55,15 @@ variables:
     value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/heads/test') }}
   - name: appRepository
     value: meshmakers/one-time-ticket-app
-  # Blueprint catalog target, mirroring effectivePublishCatalog: build catalog on
-  # main/test, release catalog on r*, no publish on dev/* (validate only).
+  # Blueprint catalog target, matching the CK model's effectivePublishCatalog gate
+  # exactly (update-build-number: shared catalog only on main + r*, everything else
+  # -> local/no-publish). Publishing a blueprint on test/* would push it to the build
+  # catalog while its CK dependency only went to a per-run local catalog — an
+  # unresolvable state — so test/* (and dev/*, feat/*, PRs) publish nothing.
   - ${{ if startsWith(variables['Build.SourceBranch'], 'refs/tags/r') }}:
       - name: blueprintCatalog
         value: PublicGitHubBlueprintCatalog
-  - ${{ elseif or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/test/')) }}:
+  - ${{ elseif eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
       - name: blueprintCatalog
         value: PrivateGitHubBlueprintCatalog
   - ${{ else }}:
