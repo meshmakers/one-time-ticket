@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: OneTimeTicket.MainLatest-1.0.0
+blueprintId: OneTimeTicket.MainLatest-1.0.1
 description: |
   One-Time Ticket — a complete OctoMesh demo app in a single installable bundle.
   Dev/test channel variant (mirrors System.Communication.MainLatest).

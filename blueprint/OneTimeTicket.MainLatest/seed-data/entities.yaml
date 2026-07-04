@@ -323,13 +323,14 @@ entities:
       # Talks only to the Mesh Adapter over HTTP — no cluster secrets needed.
       - id: System.Communication/ReceivesClusterSecrets-1
         value: false
-      # Ingress: hostname template resolved at deploy time against the
-      # controller's default domain (127.0.0.1.nip.io on kind,
-      # test-2.mm.cloud on test-2 -> e.g. https://tickets.test-2.mm.cloud).
+      # Ingress: fixed "tickets" host under the controller's default domain,
+      # resolved at deploy time (127.0.0.1.nip.io on kind, test-2.mm.cloud on
+      # test-2, staging.octo-mesh.com on staging -> https://tickets.<domain>).
+      # Single-host (not tenant-scoped) — one install per cluster domain.
       - id: System.Communication/IngressEnabled-1
         value: true
       - id: System.Communication/Hostname-1
-        value: '${octo.tenantId}.{{domain.default}}'
+        value: 'tickets.{{domain.default}}'
       # Only the tenant-scoped upstream needs overriding. The chart defaults
       # image.repository to meshmakers/one-time-ticket-app, the operator injects
       # image.privateRegistry, and image.tag defaults to the chart appVersion
