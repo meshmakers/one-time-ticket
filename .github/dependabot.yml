@@ -1,0 +1,19 @@
+# Dependabot keeps the CK model's NuGet references and the app image's base
+# image current. The app under app/ has no npm manifest (server.js uses Node
+# built-ins only), so there is no npm ecosystem entry.
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/ck"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/app"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # The Node LTS line is a platform decision, not a Dependabot bump.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
