@@ -37,8 +37,9 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
   (+ root `Directory.Build.props`, `OneTimeTicket.sln`) — the
   `octo-construction-kit` pattern. `dotnet build OneTimeTicket.sln -c DebugL`
   compiles **and** publishes `Demo.Tickets` to the local catalog (no manual
-  `octo-ckc`). CI publishes to `$(effectivePublishCatalog)` (local on dev/*,
-  PrivateGitHubCatalog on main/test, PublicGitHubCatalog on r*).
+  `octo-ckc`). CI only compiles it (`/p:OctoPublishCkModel=false`); the shared
+  `validate-and-publish-ck-versions` step publishes it (main → private catalog,
+  r* → private and public).
 - **Chart** (`src/charts/one-time-ticket-app/`): the app's own Helm chart, based
   on `octo-helm-core/src/octo-mesh-demo-app`, shipped in-repo like
   `octo-mesh-adapter`. Replaces the borrowed `property-walker` chart. Contract:
@@ -56,11 +57,13 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
   own). Folders are name-only; the version lives in `blueprintId`. The two
   `seed-data/entities.yaml` differ only in that one HelmRepository target — keep
   them in sync. `ChartVersion` is empty (track the channel's newest chart).
-- **CI** (`azure-pipelines.yml`, root): shared `octo-pipeline-templates@tpl-v0.4.6`
+- **CI** (`azure-pipelines.yml`, root): shared `octo-pipeline-templates@tpl-v1.0.0`
   + `helm-chart-build` templates. Triggers on `dev/* , test/* , main`, and `r*`
-  tags. `r*` is the production release: publishes CK → public catalog, blueprint →
-  public blueprint catalog, chart → `meshmakers.github.io/apps`, image tagged with
-  the build number. There is no `AppImageVersion` guard — the chart `appVersion`
+  tags. The CK model and both blueprints go through the shared validate-and-publish
+  steps: every build validates, `main` publishes to the private catalogs, `r*` to the
+  private and public ones, never replacing a published version — a content change
+  needs a version bump. `r*` is the production release: CK + blueprints → public
+  catalogs, chart → `meshmakers.github.io/apps`, image tagged with the build number. There is no `AppImageVersion` guard — the chart `appVersion`
   drives the image tag.
 
   > Cutover: this root pipeline replaces the deleted `devops-build/`. The ADO
@@ -86,8 +89,8 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
 4. Pipeline JSON shapes are PascalCase; `attributeName` = CK attribute name as
    declared in the type (here PascalCase: `Name`, `Secret`, `Redeemed`, `RedeemedAt`).
 5. The CK model now compiles via `dotnet build` — don't reach for `octo-ckc`
-   directly. The only standalone tool the CI still invokes is `octo-bpm`
-   (blueprint validate/publish), installed from the private NuGet feed.
+   directly. CI publishes through the shared steps, which install `octo-ckc` and
+   `octo-bpm` at `$(octoToolsVersion)` themselves.
 
 ## Reference material (canonical platform repos — NOT hand-crafted demos)
 
@@ -98,7 +101,8 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
   `octo-helm-core/src/octo-mesh-demo-app`.
 - Two-variant blueprint + helm-repo seeds: `octo-communication-controller-services`
   → `System.Communication.{MainLatest,Release}`.
-- Shared CI steps + `effectivePublishCatalog`: `octo-pipeline-templates`.
+- Shared CI steps (`validate-and-publish-ck-versions`, `validate-and-publish-blueprints`,
+  channel routing in `update-build-number`): `octo-pipeline-templates`.
 - `.research/pipeline-schema.json` — node-config JSON schema of the live mesh
   adapter (GetPipelineSchema output).
 - Do NOT model this repo on `zenon-dynprop-api` — it is itself hand-crafted and

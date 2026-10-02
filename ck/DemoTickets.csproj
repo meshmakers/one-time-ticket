@@ -6,8 +6,8 @@
       replacing the manual `octo-ckc` calls. Pattern: octo-construction-kit/src/ConstructionKits/Octo.Sdk.Demo.
 
       OctoPublishCkModel=true publishes on build to $(OctoPublishCatalog): defaults to the
-      LocalFileSystemCatalog locally, and CI overrides it to $(effectivePublishCatalog)
-      (PrivateGitHubCatalog on main/test, PublicGitHubCatalog on r* release tags).
+      LocalFileSystemCatalog locally. CI passes OctoPublishCkModel=false and publishes
+      through the shared validate-and-publish-ck-versions step instead.
 
       No GeneratePackageOnBuild: nothing consumes Demo.Tickets as a NuGet — it reaches
       runtimes as a compiled catalog artifact. System-[2.0,3.0) resolves from the catalog,
