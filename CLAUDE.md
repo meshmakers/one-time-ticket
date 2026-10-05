@@ -19,7 +19,7 @@ script and the platform gotchas. This file only adds the non-obvious bits.
 | Mesh Adapter (System.Communication seed) | `670000000000000000000002` |
 | App URL (kind ingress) | `https://one-time-ticket-test.127.0.0.1.nip.io` (pre-hostname-change install; a reinstall yields `test.127.0.0.1.nip.io`) |
 | App pod | ns `octo`, deploy `test-0771…05-property-walker` |
-| CK model in local catalog | `Demo.Tickets-1.0.0` (`~/.octo/local-catalog/ck-models/v2/d/…`) |
+| CK model in local catalog | `Demo.Tickets-1.0.1` (`~/.octo/local-catalog/ck-models/v2/d/…`) |
 
 ## Live state (tenant `tickets`, test-2 cluster, as of 2026-06-10)
 

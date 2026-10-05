@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/construction-kit-meta.schema.json
-modelId: Demo.Tickets-1.0.0
+modelId: Demo.Tickets-1.0.1
 description: One-time secret tickets for the OctoMesh capability demo.
 dependencies:
 - System-[2.0,3.0)
