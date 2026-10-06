@@ -57,7 +57,7 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
   own). Folders are name-only; the version lives in `blueprintId`. The two
   `seed-data/entities.yaml` differ only in that one HelmRepository target — keep
   them in sync. `ChartVersion` is empty (track the channel's newest chart).
-- **CI** (`azure-pipelines.yml`, root): shared `octo-pipeline-templates@tpl-v1.0.0`
+- **CI** (`azure-pipelines.yml`, root): shared `octo-pipeline-templates@tpl-v1.0.1`
   + `helm-chart-build` templates. Triggers on `dev/* , test/* , main`, and `r*`
   tags. The CK model and both blueprints go through the shared validate-and-publish
   steps: every build validates, `main` publishes to the private catalogs, `r*` to the
