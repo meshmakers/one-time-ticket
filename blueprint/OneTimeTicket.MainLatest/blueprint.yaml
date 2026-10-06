@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: OneTimeTicket.MainLatest-1.0.6
+blueprintId: OneTimeTicket.MainLatest-1.0.7
 description: |
   One-Time Ticket — a complete OctoMesh demo app in a single installable bundle.
   Dev/test channel variant (mirrors System.Communication.MainLatest).
@@ -32,7 +32,7 @@ description: |
   HelmRepository association (003 dev vs 005 apps).
 
 ckModelDependencies:
-  - Demo.Tickets-[1.1.0,2.0.0)
+  - Demo.Tickets-[1.2.0,2.0.0)
 
 seedDataPath: seed-data/entities.yaml
 
