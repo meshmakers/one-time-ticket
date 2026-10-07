@@ -145,15 +145,17 @@ removes the seeded Application entity; undeploy the workload first:
 
 `azure-pipelines.yml` (root, pool `meshmakers-ci-agents`) uses the shared
 `octo-pipeline-templates` + `helm-chart-build` templates — the same shape as
-`octo-mesh-adapter` and `octo-construction-kit`. Publishing is gated by branch/tag
-(via the shared `update-build-number` template's `effectivePublishCatalog`):
+`octo-mesh-adapter` and `octo-construction-kit`. The CK model and both blueprints
+go through the shared `validate-and-publish-ck-versions` / `validate-and-publish-blueprints`
+steps, which take their catalogs from the shared `update-build-number` routing and never
+replace a published version — a content change needs a version bump:
 
-| Trigger | CK model | Blueprint | Chart | Image |
+| Trigger | CK model | Blueprints | Chart | Image |
 |---|---|---|---|---|
-| `dev/*` | local catalog | validate only | — | build (no publish) |
-| `main` | `PrivateGitHubCatalog` (build) | `PrivateGitHubBlueprintCatalog` | dev channel | push `<buildnumber>` |
-| `test/<X.Y>-*` | `PrivateGitHubCatalog` | `PrivateGitHubBlueprintCatalog` | — | push `<buildnumber>` |
-| `r<X.Y.Z>` tag | **`PublicGitHubCatalog`** | **`PublicGitHubBlueprintCatalog`** | **apps release channel** (`meshmakers.github.io/apps`) | push `<X.Y.Z>` |
+| `dev/*` | validate only | validate only | — | build (no publish) |
+| `main` | `PrivateGitHubCatalog` | `PrivateGitHubBlueprintCatalog` | dev channel | push `<buildnumber>` |
+| `test/<X.Y>-*` | validate only | validate only | — | push `<buildnumber>` |
+| `r<X.Y.Z>` tag | `PrivateGitHubCatalog` **and `PublicGitHubCatalog`** | `PrivateGitHubBlueprintCatalog` **and `PublicGitHubBlueprintCatalog`** | **apps release channel** (`meshmakers.github.io/apps`) | push `<X.Y.Z>` |
 
 **Managed environments (staging/prod) read the public CK catalog + the apps
 release Helm channel**, so cutting an `r*` tag is what makes the app installable
