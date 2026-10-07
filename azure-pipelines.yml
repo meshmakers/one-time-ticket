@@ -1,14 +1,17 @@
 # Root-level CI pipeline for one-time-ticket, using the shared templates from
-# octo-pipeline-templates + the helm-chart-build companion repo.
+# octo-pipeline-templates@tpl-v1.0.1 + the helm-chart-build companion repo —
+# the same shape as octo-mesh-adapter and octo-construction-kit. Replaces the
+# hand-rolled devops-build/ flow (manual octo-ckc + local template copies).
 #
-# Per-channel publishing (CK model and blueprints through the shared
-# validate-and-publish steps, AB#5121; routing from update-build-number):
-#   main             -> CK model + both blueprints: private catalogs; chart: dev channel
-#   r<X.Y.Z> (tag)   -> CK model + both blueprints: private AND public catalogs;
-#                       chart: release apps channel
-#   every other branch -> validate only, nothing published
-# A published CK or blueprint version is never replaced: a content change needs a
-# version bump.
+# Coexists with devops-build/azure-pipelines.yml during the pilot. Once parity
+# is verified in a CI run, flip the pipeline definition's yamlFilename to this
+# file and delete devops-build/ in a follow-up commit (the octo-construction-kit
+# migration approach).
+#
+# Per-channel publishing (CK model + blueprints via the shared validate-and-publish steps):
+#   main             -> CK model + blueprints: private catalogs; chart: dev channel
+#   r<X.Y.Z> (tag)   -> CK model + blueprints: private AND public catalogs; chart: release apps channel
+#   every other branch -> validated only; chart: not published
 #
 # This is the repo that ships the app to managed environments: staging/prod read
 # the PUBLIC CK catalog + the apps release Helm channel, so only an r* release
@@ -51,11 +54,7 @@ variables:
     value: ${{ startsWith(variables['Build.SourceBranch'], 'refs/heads/test') }}
   - name: appRepository
     value: meshmakers/one-time-ticket-app
-  # Platform line the CK compiler and blueprint manager are taken from. Matches the
-  # OctoCoreLibVersion this build compiles the CK model against
-  # (Directory.Build.props: private feed -> 0.1.*), so the tools understand its
-  # schema. Set explicitly: the r* tags carry the app's own version (r1.0.4), so the
-  # shared steps would otherwise derive a 1.0.* tool line that does not exist.
+  # Tool line for the shared steps: the r* tags carry the app's own version (r1.0.x).
   - name: octoToolsVersion
     value: '0.1.*'
 
@@ -87,12 +86,6 @@ stages:
               restoreArguments: '--force /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
               noCache: true
 
-          # Compiles the solution, the CK model included, and publishes it nowhere
-          # (/p:OctoPublishCkModel=false overrides the csproj, which keeps the flag
-          # for local development): the shared CK step below owns publishing. No
-          # other CK in this solution depends on Demo.Tickets, so no local catalog
-          # is needed. The GitHub API keys keep CkCompile's catalog refresh clear of
-          # GitHub's unauthenticated rate limit.
           - task: DotNetCoreCLI@2
             displayName: 'Build'
             inputs:
@@ -108,14 +101,7 @@ stages:
               zipAfterPublish: false
               modifyOutputPath: false
 
-          # CK model and blueprints: version and schema gate on every build, then
-          # main -> private catalogs, r* tags -> private AND public, never replacing
-          # a published version; every other branch validates only. Both run after
-          # the build, so a run whose build fails has published nothing — a published
-          # version cannot be withdrawn. The image and chart steps run after the
-          # publish, so their failures do not undo it. The CK step goes first: both
-          # blueprints require Demo.Tickets-[1.0.0,2.0.0), so on main the model has
-          # to be in the catalog before them.
+          # CK model first: both blueprints require Demo.Tickets.
           - template: templates/steps/validate-and-publish-ck-versions.yml@pipelineTemplates
             parameters:
               constructionKitPaths:
