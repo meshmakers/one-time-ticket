@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: OneTimeTicket.MainLatest-1.0.7
+blueprintId: OneTimeTicket.MainLatest-2.0.0
 description: |
   One-Time Ticket — a complete OctoMesh demo app in a single installable bundle.
   Dev/test channel variant (mirrors System.Communication.MainLatest).
@@ -19,7 +19,7 @@ description: |
     one-time-ticket-app chart from the meshmakers-dev Helm repo.
 
   PREREQUISITE: communication must be enabled on the target tenant. The
-  service-managed System.Communication.MainLatest blueprint seeds the Pool
+  service-managed System.Communication.MainLatest blueprint seeds the deployment site
   (670000000000000000000001), Mesh Adapter (670000000000000000000002) and dev
   Helm repo (670000000000000000000003) this seed associates to. We point at
   that pre-seeded repo rather than seeding our own.

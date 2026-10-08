@@ -10,7 +10,7 @@ $schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
 # System.Communication blueprint applied first as a dependency.
 # ---------------------------------------------------------------------------
 dependencies:
-- System.Communication-[3.1,4.0)
+- System.Communication-[4.5,5.0)
 entities:
   # === Editor adapter (from RtEntities.yaml) ===
   # ---------------------------------------------------------------------------
@@ -447,9 +447,9 @@ entities:
     ckTypeId: System.Communication/Application-1
     associations:
     # Deploy target: the Cloud pool the central operator owns.
-    - roleId: System.Communication/Manages-1
+    - roleId: System.Communication/Hosts-1
       targetRtId: '670000000000000000000001'
-      targetCkTypeId: System.Communication/Pool-1
+      targetCkTypeId: System.Communication/DeploymentSite-1
     # Chart source: the meshmakers-dev Helm repo seeded by System.Communication.
     # 670…003 exists on both dev (kind) and test (test-2) tenants, so the chart
     # is always pulled from the rolling dev channel.

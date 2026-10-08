@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: ZenonDynprop.MainLatest-1.0.0
+blueprintId: ZenonDynprop.MainLatest-2.0.0
 description: |
   Zenon DynProp API — the whole app as one installable bundle: the Editor
   adapter, the DataFlow with its 8 ETL pipelines, and the property-walker UI
@@ -18,7 +18,7 @@ description: |
   (LocalFileSystem or GitHub) can publish it.
 
   PREREQUISITE: communication must be enabled on the target tenant. The
-  service-managed System.Communication blueprint auto-seeds the Pool
+  service-managed System.Communication blueprint auto-seeds the deployment site
   (670000000000000000000001), Mesh Adapter (670000000000000000000002) and dev
   Helm repo (670000000000000000000003) this app's seed associates to. It is NOT
   declared as a blueprintDependency because it is not catalog-discoverable from

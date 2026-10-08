@@ -7,10 +7,10 @@ $schema: https://schemas.meshmakers.cloud/runtime-model.schema.json
 #
 # Associations into 670000000000000000000001/002/003 resolve against the
 # entities the service-managed System.Communication blueprint seeds on every
-# communication-enabled tenant (Pool / Mesh Adapter / dev Helm repo).
+# communication-enabled tenant (DeploymentSite, called Pool before System.Communication 4.0.0 / Mesh Adapter / dev Helm repo).
 # ---------------------------------------------------------------------------
 dependencies:
-- System.Communication-[3.1,4.0)
+- System.Communication-[4.5,5.0)
 entities:
 
   # ========================================================================
@@ -296,10 +296,10 @@ entities:
   - rtId: '077100000000000000000005'
     ckTypeId: System.Communication/Application-1
     associations:
-      # Deploy target: the Cloud pool the central operator owns.
-      - roleId: System.Communication/Manages-1
+      # Deploy target: the Cloud deployment site the central operator owns.
+      - roleId: System.Communication/Hosts-1
         targetRtId: '670000000000000000000001'
-        targetCkTypeId: System.Communication/Pool-1
+        targetCkTypeId: System.Communication/DeploymentSite-1
       # Chart source: meshmakers-dev (dev channel, 003) — pre-seeded by
       # System.Communication.MainLatest. The Release variant points at the
       # apps release channel (005) instead.
