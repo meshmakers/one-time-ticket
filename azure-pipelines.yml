@@ -1,5 +1,5 @@
 # Root-level CI pipeline for one-time-ticket, using the shared templates from
-# octo-pipeline-templates@tpl-v1.0.1 + the helm-chart-build companion repo —
+# octo-pipeline-templates@tpl-v1.1.2 + the helm-chart-build companion repo —
 # the same shape as octo-mesh-adapter and octo-construction-kit. Replaces the
 # hand-rolled devops-build/ flow (manual octo-ckc + local template copies).
 #
@@ -25,7 +25,7 @@ resources:
       type: github
       name: meshmakers/octo-pipeline-templates
       endpoint: meshmakers-access-token
-      ref: refs/tags/tpl-v1.0.1
+      ref: refs/tags/tpl-v1.1.2
     - repository: helmChartBuild
       type: github
       name: meshmakers/helm-chart-build
