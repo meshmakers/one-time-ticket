@@ -228,6 +228,17 @@ entities:
                       targetPath: $.secret
                       identity: ServiceAccount
 
+                    - type: If@1
+                      description: No readable secret (created without one, or its key is not in the key ring)
+                      path: $.secret
+                      operator: Equal
+                      valueType: String
+                      transformations:
+                        - type: SetPrimitiveValue@1
+                          value: secret_unavailable
+                          valueType: String
+                          targetPath: $.error
+
                     - type: DateTime@1
                       description: Redeem timestamp
                       operation: Now

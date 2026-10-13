@@ -88,6 +88,11 @@ restart trick (`octo/octo-mesh-asset-rep-services`). kubectl context: `test-2`.
    raw context contains `$.body.secret` and lookup results!).
 4. Pipeline JSON shapes are PascalCase; `attributeName` = CK attribute name as
    declared in the type (here PascalCase: `Name`, `Secret`, `Redeemed`, `RedeemedAt`).
+   Since Demo.Tickets 1.3.0 `Secret` is a **Secret attribute** (AB#5528): queries
+   see only `{ "isSet": … }`, the plaintext comes from `RevealSecret@1`
+   (`identity: ServiceAccount`), `""` written means "unchanged", and a clear
+   needs a JSON null from a `valuePath` (`CreateUpdateInfo@1` skips a static
+   `value: null`). See README "Platform gotchas".
 5. The CK model now compiles via `dotnet build` — don't reach for `octo-ckc`
    directly. CI publishes through the shared steps, which install `octo-ckc` and
    `octo-bpm` at `$(octoToolsVersion)` themselves.
