@@ -213,6 +213,15 @@ octo-cli -c DeployWorkload -id 077100000000000000000005       # pulls the one-ti
   Use `Project@1` with `clear: true` as the last node to control (and sanitize!)
   the response.
 - Pipeline result-set shapes are **PascalCase** (`$.lookup.TotalCount`,
-  `$.lookup.Items[0].Attributes.Secret`); `attributeName` in
+  `$.lookup.Items[0].RtId`); `attributeName` in
   `CreateUpdateInfo@1` matches the CK attribute name as declared (`Secret`,
   `Redeemed`, …).
+- Since Demo.Tickets 1.3.0 / OneTimeTicket.* 2.1.0 the ticket `Secret` is a
+  **Secret attribute** (AB#5528): stored encrypted, returned by queries only as
+  `{ "isSet": … }`. The redeem pipeline reads the plaintext with
+  `RevealSecret@1` (`identity: ServiceAccount` — the route is anonymous, so the
+  Mesh Adapter's service account must be allowed to read `Demo.Tickets/Ticket`)
+  and burns it with **null**: `""` now means "unchanged", and
+  `CreateUpdateInfo@1` skips a static `value: null`, so the null comes from a
+  `valuePath` (`$.burnSecret`, set by an empty `SetPrimitiveValue@1`). Redeploy
+  the DataFlow right after installing 2.1.0 over 2.0.x.

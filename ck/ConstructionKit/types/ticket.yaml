@@ -8,6 +8,8 @@ types:
     name: Name
   - id: ${this}/TicketSecret-1
     name: Secret
+    # Optional: the redeem flow clears the secret, and clearing a required Secret is refused.
+    isOptional: true
   - id: ${this}/TicketRedeemed-1
     name: Redeemed
   - id: ${this}/TicketRedeemedAt-1
