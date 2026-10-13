@@ -246,16 +246,37 @@ entities:
                   value: false
                   valueType: Boolean
                   transformations:
-                    - type: SetPrimitiveValue@1
-                      description: Capture the secret for the response
-                      valuePath: $.lookup.Items[0].Attributes.Secret
-                      valueType: String
+                    - type: RevealSecret@1
+                      description: Capture the secret for the response (decrypted in process, masked in diagnostics)
+                      ckTypeId: Demo.Tickets/Ticket
+                      rtIdPath: $.lookup.Items[0].RtId
+                      attributeName: Secret
                       targetPath: $.secret
+                      identity: ServiceAccount
+
+                    - type: If@1
+                      description: No readable secret (created without one, or its key is not in the key ring)
+                      path: $.secret
+                      operator: Equal
+                      valueType: String
+                      transformations:
+                        - type: SetPrimitiveValue@1
+                          value: secret_unavailable
+                          valueType: String
+                          targetPath: $.error
 
                     - type: DateTime@1
                       description: Redeem timestamp
                       operation: Now
                       targetPath: $.now
+
+                    # A JSON null in the data context: CreateUpdateInfo@1 skips a static
+                    # `value: null`, but writes null from a valuePath, which clears the Secret.
+                    # No `value` here: an omitted value is null for valueType String.
+                    - type: SetPrimitiveValue@1
+                      description: Clear value for the burn (JSON null)
+                      valueType: String
+                      targetPath: $.burnSecret
 
                     - type: CreateUpdateInfo@1
                       description: Mark redeemed and clear the stored secret
@@ -272,9 +293,11 @@ entities:
                         - attributeName: RedeemedAt
                           attributeValueType: DateTime
                           valuePath: $.now
+                        # null clears the Secret ("" would mean "unchanged" and the secret
+                        # would survive the redeem). Must come from a valuePath, see above.
                         - attributeName: Secret
                           attributeValueType: String
-                          value: ""
+                          valuePath: $.burnSecret
 
                     - type: ApplyChanges@2
                       description: Persist the redeem

@@ -5,8 +5,12 @@ attributes:
   valueType: String
 
 - id: TicketSecret
-  description: The secret delivered on a successful redeem (e.g. an API key). Cleared after redemption.
-  valueType: String
+  description: >-
+    The secret delivered on a successful redeem (e.g. an API key). Stored encrypted; write the
+    plaintext, reads only report whether it is set. The redeem pipeline reveals it once with
+    RevealSecret@1 and clears it (null).
+  valueType: Secret
+  ownership: Secret
 
 - id: TicketRedeemed
   description: Whether this ticket has already been redeemed. A redeemed ticket never reveals its secret again.

@@ -53,7 +53,7 @@ Helm repo `…003`).
 #    Pick the variant for the target environment:
 #      dev/test          -> OneTimeTicket.MainLatest
 #      staging/production -> OneTimeTicket.Release
-octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-1.0.0
+octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-2.1.0
 
 # 2. Deploy the pipelines to the Mesh Adapter
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
@@ -105,7 +105,7 @@ dotnet build OneTimeTicket.sln -c DebugL
 
 # 2. Blueprint: copy a variant into the local blueprint catalog (pick MainLatest
 #    for a dev/test tenant). The catalog layout is version-foldered:
-$dst = "$HOME\.octo\local-blueprint-catalog\blueprints\v1\OneTimeTicket.MainLatest\1.0.0"
+$dst = "$HOME\.octo\local-blueprint-catalog\blueprints\v1\OneTimeTicket.MainLatest\2.1.0"
 New-Item -ItemType Directory -Force "$dst\seed-data" | Out-Null
 Copy-Item .\blueprint\OneTimeTicket.MainLatest\blueprint.yaml $dst -Force
 Copy-Item .\blueprint\OneTimeTicket.MainLatest\seed-data\entities.yaml "$dst\seed-data" -Force
@@ -125,7 +125,7 @@ To iterate on the **app** only: rebuild + `kind load` + restart the pod
 (`kubectl rollout restart deploy/<tenant>-077100000000000000000005-one-time-ticket-app -n octo`).
 
 To iterate on **pipelines**: edit the seed, re-apply with
-`octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-1.0.0 -f`, then `DeployDataFlow`.
+`octo-cli -c InstallBlueprint -b OneTimeTicket.MainLatest-2.1.0 -f`, then `DeployDataFlow`.
 
 ### Resetting the demo
 
@@ -178,7 +178,7 @@ variant for the environment — `OneTimeTicket.MainLatest` on dev/test,
 `OneTimeTicket.Release` on staging/production:
 
 ```powershell
-octo-cli -c InstallBlueprint -b OneTimeTicket.Release-1.0.0   # resolves blueprint + CK model from the GitHub catalogs
+octo-cli -c InstallBlueprint -b OneTimeTicket.Release-2.1.0   # resolves blueprint + CK model from the GitHub catalogs
 octo-cli -c DeployDataFlow --identifier 077100000000000000000001
 octo-cli -c DeployWorkload -id 077100000000000000000005       # pulls the one-time-ticket-app chart + image
 ```
@@ -213,6 +213,20 @@ octo-cli -c DeployWorkload -id 077100000000000000000005       # pulls the one-ti
   Use `Project@1` with `clear: true` as the last node to control (and sanitize!)
   the response.
 - Pipeline result-set shapes are **PascalCase** (`$.lookup.TotalCount`,
-  `$.lookup.Items[0].Attributes.Secret`); `attributeName` in
+  `$.lookup.Items[0].RtId`); `attributeName` in
   `CreateUpdateInfo@1` matches the CK attribute name as declared (`Secret`,
   `Redeemed`, …).
+- Since Demo.Tickets 1.3.0 / OneTimeTicket.* 2.1.0 the ticket `Secret` is a
+  **Secret attribute** (AB#5528): stored encrypted, returned by queries only as
+  `{ "isSet": … }`. The redeem pipeline reads the plaintext with
+  `RevealSecret@1` (`identity: ServiceAccount` — the route is anonymous, so the
+  Mesh Adapter's service account must be allowed to read `Demo.Tickets/Ticket`)
+  and burns it with **null**: `""` now means "unchanged", and
+  `CreateUpdateInfo@1` skips a static `value: null`, so the null comes from a
+  `valuePath` (`$.burnSecret`, set by an empty `SetPrimitiveValue@1`). Redeploy
+  the DataFlow right after installing 2.1.0 over 2.0.x. Do not install a
+  blueprint older than 2.1.0 (2.0.0 or any 1.x) against Demo.Tickets >= 1.3.0:
+  its redeem pipeline cannot read the Secret and its `""` burn would keep it.
+  A ticket without a readable secret (created without one, or encrypted with a
+  key that is not in the ring) redeems to `{ "error": "secret_unavailable" }`
+  and is burned all the same.

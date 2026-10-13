@@ -1,5 +1,5 @@
 $schema: https://schemas.meshmakers.cloud/blueprint-meta.schema.json
-blueprintId: OneTimeTicket.MainLatest-2.0.0
+blueprintId: OneTimeTicket.MainLatest-2.1.0
 description: |
   One-Time Ticket — a complete OctoMesh demo app in a single installable bundle.
   Dev/test channel variant (mirrors System.Communication.MainLatest).
@@ -7,6 +7,8 @@ description: |
   A developer creates a "ticket" holding a secret (e.g. an API key) and shares a
   redeem link. The secret can be fetched over HTTP exactly once; afterwards the
   ticket is burned (redeemed flag set, secret cleared in the data mesh).
+  The secret is a Secret attribute (Demo.Tickets 1.3.0): stored encrypted, never
+  returned by queries; only the redeem pipeline reveals it (RevealSecret@1).
 
   What this blueprint installs:
   - the Demo.Tickets construction kit model (auto-imported from the catalog)
@@ -26,13 +28,17 @@ description: |
 
   Install only seeds entities — trigger the rollout afterwards with
   DeployDataFlow (the pipelines) + DeployWorkload (the web app).
+  UPGRADE from 2.0.x: redeploy the DataFlow right after installing this version
+  (the redeem pipeline uses RevealSecret@1, which needs the Secret model). The
+  redeem route is anonymous, so RevealSecret@1 runs as the Mesh Adapter's service
+  account; that account must be allowed to read Demo.Tickets/Ticket.
 
   NOTE: the staging/production variant is OneTimeTicket.Release. Keep the
   seed-data of the two variants in sync — they differ only in the Application's
   HelmRepository association (003 dev vs 005 apps).
 
 ckModelDependencies:
-  - Demo.Tickets-[1.2.0,2.0.0)
+  - Demo.Tickets-[1.3.0,2.0.0)
 
 seedDataPath: seed-data/entities.yaml
 
