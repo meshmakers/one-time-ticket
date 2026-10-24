@@ -17,5 +17,5 @@ unaffected. Blueprints keep their `Demo.Tickets-[1.3.0,2.0.0)` pin, which covers
 
 ### Changed
 
-- Dependency 'System': version changed '2.5.0' → '2.7.0' _(minor — compatible dependency version change)_
-- Model 'Demo.Tickets': rangeRetention changed 'false' → 'true' _(minor — dependency pinning switched between exact pins and range retention — the one-time re-pin (F2.6); the resolved dependencies are still compared)_
+- Dependency 'System': declared range stays `System-[2.5,3.0)`; the compiled manifest now resolves it to System-2.7.0 (was 2.5.0) _(minor — compatible dependency version change)_
+- Model 'Demo.Tickets': rangeRetention changed 'false' → 'true' (separate from the resolved System version) — the one-time re-pin from exact pins to range retention (F2.6) _(minor)_
