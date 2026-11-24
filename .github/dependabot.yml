@@ -7,7 +7,7 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    directory: "/"
+    directory: "/ck"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 2
